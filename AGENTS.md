@@ -17,7 +17,10 @@
 
 ## 開発
 
+エージェント実行環境の非ログインシェルでは Node.js が PATH に入っていない場合があるため、asdf のパスを通す (`export PATH="$HOME/.asdf/shims:$HOME/.asdf/bin:$PATH"`)。
+
 ```sh
+export PATH="$HOME/.asdf/shims:$HOME/.asdf/bin:$PATH"
 npm run dev        # 開発サーバー
 npm run typecheck  # TypeScript 7
 npm run lint       # Biome (npm run format で整形)
