@@ -182,6 +182,17 @@ describe('simple-buzzer', () => {
 		expect(current()?.questionId).toBe('q1');
 	});
 
+	it('取り消した問題をさらに未出題に戻しても、得点は二重に戻らない', () => {
+		run({type: 'next'});
+		buzz('a');
+		run({type: 'judge', correct: true});
+		run({type: 'cancel', returnToPool: false});
+		expect(state().scores['a']).toBe(0);
+		expect(() => run({type: 'cancel', returnToPool: false})).toThrow('既に取り消されています');
+		run({type: 'cancel', returnToPool: true});
+		expect(state().scores['a']).toBe(0);
+	});
+
 	it('押下のリセットで判定前の押下だけが消える', () => {
 		run({type: 'next'});
 		buzz('a');

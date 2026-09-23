@@ -228,10 +228,16 @@ const apply = (game: G, command: SimpleBuzzerCommand, ctx: CommandContext) => {
 			if (!record) {
 				throw new CommandError('取り消せる問題がありません');
 			}
-			// 判定済みの得点変動を巻き戻す
-			for (const buzz of record.buzzes) {
-				if (buzz.status === 'correct') addScore(state, buzz.participantId, -1);
-				if (buzz.status === 'wrong') addScore(state, buzz.participantId, 1);
+			const alreadyCancelled = record.result === 'cancelled';
+			if (alreadyCancelled && !command.returnToPool) {
+				throw new CommandError('この問題は既に取り消されています');
+			}
+			// 判定済みの得点変動を巻き戻す (取り消し済みなら巻き戻し済み)
+			if (!alreadyCancelled) {
+				for (const buzz of record.buzzes) {
+					if (buzz.status === 'correct') addScore(state, buzz.participantId, -1);
+					if (buzz.status === 'wrong') addScore(state, buzz.participantId, 1);
+				}
 			}
 			if (command.returnToPool) {
 				state.history.pop();
