@@ -63,7 +63,8 @@ src/
   - `questionExtraSchema`: 企画ごとの問題の追加フィールド (genre、画像、ヒント、音声など)
   - `commandSchema`: 企画固有のコマンド (zod の discriminated union)
   - `permissions`: コマンドごとに実行できる role
-  - `initialState()` / `reduce(game, command, ctx)`: 純粋関数で、`ctx` にサーバー時刻と実行者が入る
+  - `initialState()` / `apply(game, command, ctx)`: エンジンが渡した Game のコピーを書き換える。`ctx` にサーバー時刻と実行者が入る。
+    外部の状態に依存しないので、イベントログを再生すれば同じ状態を再現できる (取り消しに使う)
   - `project(game, viewer)`: 閲覧者ごとに送る情報を絞る (参加者やモニターに未出題の答えを送らない)
 - クライアント側の `src/client/modes/registry.ts` に、mode ごとの画面コンポーネントを登録する。
 
@@ -73,14 +74,15 @@ src/
 ### 同期モデル (サーバーが唯一の正)
 
 1. クライアントは `command` を送るだけ。
-2. サーバーは権限を確認し、zod で検証してから `reduce` を適用する。
+2. サーバーは権限を確認し、zod で検証してから `apply` を適用する。
 3. イベントを SQLite に追記し、Game のスナップショットを更新する。
 4. 閲覧者の種類ごとに `project()` した Game 全体をブロードキャストする (単調増加の `version` 付き)。
 
 - room は `game:{id}:host` / `:monitor` / `:participant:{pid}`。
 - 数十人規模なので差分は送らず、毎回 state 全体を送る。
 - 問題の編集も共通コマンド (`questions.*`) として同じ経路を通るので、編集画面と司会者画面が常に一致する。
-- イベントログは感想戦、監査、将来の undo に使う。
+- 取り消し (undo): 直近の操作 (問題の編集と参加登録を除く) を除いてイベントログを最初から再生し、状態を作り直す。
+- イベントログは感想戦や監査にも使える。
 
 ### 認証 (LAN 前提の軽いもの)
 
