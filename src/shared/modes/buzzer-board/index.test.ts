@@ -402,4 +402,249 @@ describe('buzzer-board mode', () => {
 		expect(projectedAfter.questions[0]?.id).toBe('q1');
 		expect(projectedAfter.questions[0]?.answer).toBe('ノンジャンルの答え1');
 	});
+
+	describe('ボードクイズ (#10)', () => {
+		it('スルー時: 勝ち抜け者が0人なら問題終了、1人以上なら board-answering に移行する', () => {
+			let game = createSampleGame(3, 2);
+			game = exec(game, {type: 'next', questionId: 'q1'}, host, 1000);
+			// 勝ち抜け者がいない状態でスルー
+			game = exec(game, {type: 'through'}, host, 2000);
+			expect(game.state.phase).toBe('closed');
+			expect(game.state.history[0]?.result).toBe('through');
+			expect(game.state.history[0]?.board).toBeNull();
+
+			// p1 を勝ち抜け (5点) にする
+			game = exec(game, {type: 'setCleared', participantId: 'p1', cleared: true}, host, 2100);
+			game = exec(game, {type: 'setScore', participantId: 'p1', score: 5}, host, 2100);
+
+			// 2問目出題
+			game = exec(game, {type: 'next', questionId: 'q2'}, host, 3000);
+			expect(game.state.phase).toBe('reading');
+
+			// p2 が休み中
+			game = exec(game, {type: 'setRest', participantId: 'p2', rest: 2}, host, 3050);
+
+			// スルー
+			game = exec(game, {type: 'through'}, host, 4000);
+			expect(game.state.phase).toBe('board-answering');
+			expect(game.state.history[1]?.result).toBe('through');
+			expect(game.state.history[1]?.board).not.toBeNull();
+			expect(game.state.history[1]?.board?.answers).toEqual({});
+			// 休みが1減る
+			expect(game.state.rest.p2).toBe(1);
+		});
+
+		it('boardSubmit: 勝ち抜けた人だけが回答を送信でき、上書きもできる', () => {
+			let game = createSampleGame(3, 2);
+			game = exec(game, {type: 'setCleared', participantId: 'p1', cleared: true}, host, 0);
+			game = exec(game, {type: 'next', questionId: 'q1'}, host, 1000);
+			game = exec(game, {type: 'through'}, host, 2000);
+			expect(game.state.phase).toBe('board-answering');
+
+			// 勝ち抜けていない p2 が送ると拒否
+			expect(() => exec(game, {type: 'boardSubmit', text: '回答'}, p2, 2100)).toThrow(
+				'勝ち抜けていないため回答できません',
+			);
+
+			// 司会者が送ると権限エラーで拒否
+			expect(() => exec(game, {type: 'boardSubmit', text: '回答'}, host, 2100)).toThrow(
+				'この操作をする権限がありません',
+			);
+
+			// 空文字は拒否
+			expect(() => exec(game, {type: 'boardSubmit', text: '   '}, p1, 2100)).toThrow(
+				'回答を入力してください',
+			);
+
+			// 100文字超は拒否
+			expect(() => exec(game, {type: 'boardSubmit', text: 'a'.repeat(101)}, p1, 2100)).toThrow(
+				'回答は100文字以内で入力してください',
+			);
+
+			// 正常に送信
+			game = exec(game, {type: 'boardSubmit', text: '  富士山  '}, p1, 2200);
+			expect(game.state.history[0]?.board?.answers.p1).toEqual({
+				participantId: 'p1',
+				text: '富士山',
+				submittedAt: 2200,
+				correct: null,
+			});
+
+			// 送り直して上書き
+			game = exec(game, {type: 'boardSubmit', text: 'エベレスト'}, p1, 2300);
+			expect(game.state.history[0]?.board?.answers.p1).toEqual({
+				participantId: 'p1',
+				text: 'エベレスト',
+				submittedAt: 2300,
+				correct: null,
+			});
+		});
+
+		it('締め切り・仮判定・確定・得点の流れと未判定拒否・無回答扱い', () => {
+			let game = createSampleGame(3, 2);
+			// p1 と p2 が勝ち抜け
+			game = exec(game, {type: 'setCleared', participantId: 'p1', cleared: true}, host, 0);
+			game = exec(game, {type: 'setCleared', participantId: 'p2', cleared: true}, host, 0);
+			game = exec(game, {type: 'setScore', participantId: 'p1', score: 5}, host, 0);
+			game = exec(game, {type: 'setScore', participantId: 'p2', score: 5}, host, 0);
+
+			game = exec(game, {type: 'next', questionId: 'q1'}, host, 1000);
+			game = exec(game, {type: 'through'}, host, 2000);
+
+			// p1 だけが回答を送信
+			game = exec(game, {type: 'boardSubmit', text: '徳川家康'}, p1, 2100);
+
+			// 締め切り (boardClose)
+			game = exec(game, {type: 'boardClose'}, host, 2500);
+			expect(game.state.phase).toBe('board-judging');
+			expect(game.state.history[0]?.board?.closedAt).toBe(2500);
+
+			// p2 は無回答扱い
+			expect(game.state.history[0]?.board?.answers.p2).toEqual({
+				participantId: 'p2',
+				text: '',
+				submittedAt: null,
+				correct: false,
+			});
+
+			// 締め切り後は回答変更不可
+			expect(() => exec(game, {type: 'boardSubmit', text: '織田信長'}, p1, 2600)).toThrow(
+				'現在は回答を受け付けていません',
+			);
+
+			// p1 が未判定のまま確定しようとすると拒否
+			expect(() => exec(game, {type: 'boardConfirm'}, host, 2700)).toThrow(
+				'未判定の回答が残っています',
+			);
+
+			// 仮判定: p1 を正解に
+			game = exec(game, {type: 'boardMark', participantId: 'p1', correct: true}, host, 2800);
+			expect(game.state.history[0]?.board?.answers.p1?.correct).toBe(true);
+
+			// 確定 (boardConfirm)
+			game = exec(game, {type: 'boardConfirm'}, host, 3000);
+			expect(game.state.phase).toBe('closed');
+			expect(game.state.history[0]?.board?.confirmedAt).toBe(3000);
+			expect(game.state.history[0]?.endedAt).toBe(3000);
+
+			// 得点: p1 は 5 -> 6 (5点上限を超えて+1加算される), p2 は 5のまま
+			expect(game.state.scores.p1).toBe(6);
+			expect(game.state.scores.p2).toBe(5);
+
+			// 連答ボーナスはなく、連答カウントも null のまま
+			expect(game.state.streak).toBeNull();
+
+			// 確定後は判定変更も不可
+			expect(() =>
+				exec(game, {type: 'boardMark', participantId: 'p1', correct: false}, host, 3100),
+			).toThrow('判定中ではありません');
+		});
+
+		it('boardReopen: 締め切りを取り消して再開できる', () => {
+			let game = createSampleGame(3, 2);
+			game = exec(game, {type: 'setCleared', participantId: 'p1', cleared: true}, host, 0);
+			game = exec(game, {type: 'setCleared', participantId: 'p2', cleared: true}, host, 0);
+			game = exec(game, {type: 'next', questionId: 'q1'}, host, 1000);
+			game = exec(game, {type: 'through'}, host, 2000);
+
+			game = exec(game, {type: 'boardSubmit', text: '回答1'}, p1, 2100);
+			game = exec(game, {type: 'boardClose'}, host, 2200);
+			expect(game.state.phase).toBe('board-judging');
+			expect(game.state.history[0]?.board?.answers.p2).toBeDefined();
+
+			// 司会者が再開 (boardReopen)
+			game = exec(game, {type: 'boardReopen'}, host, 2300);
+			expect(game.state.phase).toBe('board-answering');
+			expect(game.state.history[0]?.board?.closedAt).toBeNull();
+			// 自動生成された無回答エントリは削除されている
+			expect(game.state.history[0]?.board?.answers.p2).toBeUndefined();
+			// p1 の回答は保持されている
+			expect(game.state.history[0]?.board?.answers.p1?.text).toBe('回答1');
+
+			// p2 も回答を送信できる
+			game = exec(game, {type: 'boardSubmit', text: '回答2'}, p2, 2400);
+			expect(game.state.history[0]?.board?.answers.p2?.text).toBe('回答2');
+		});
+
+		it('投影 (project): 確定前はモニターと他人に回答本文・判定を隠蔽し、確定後は全員に開示する', () => {
+			let game = createSampleGame(3, 2);
+			game = exec(game, {type: 'setCleared', participantId: 'p1', cleared: true}, host, 0);
+			game = exec(game, {type: 'setCleared', participantId: 'p2', cleared: true}, host, 0);
+			game = exec(game, {type: 'next', questionId: 'q1'}, host, 1000);
+			game = exec(game, {type: 'through'}, host, 2000);
+
+			game = exec(game, {type: 'boardSubmit', text: '秘密の回答1'}, p1, 2100);
+			game = exec(game, {type: 'boardSubmit', text: '秘密の回答2'}, p2, 2200);
+			game = exec(game, {type: 'boardClose'}, host, 2300);
+			game = exec(game, {type: 'boardMark', participantId: 'p1', correct: true}, host, 2400);
+			game = exec(game, {type: 'boardMark', participantId: 'p2', correct: false}, host, 2400);
+
+			// 確定前の投影
+			// 1. モニター
+			const monitorProj = buzzerBoard.project(game, {role: 'monitor'});
+			const mAns = monitorProj.state.history[0]?.board?.answers;
+			expect(mAns?.p1?.text).toBe('');
+			expect(mAns?.p1?.correct).toBeNull();
+			expect(mAns?.p1?.submittedAt).toBe(2100);
+			expect(mAns?.p2?.text).toBe('');
+			expect(mAns?.p2?.correct).toBeNull();
+			// 問題の答えも隠蔽されている
+			expect(monitorProj.questions.length).toBe(0);
+
+			// 2. p1 (本人)
+			const p1Proj = buzzerBoard.project(game, {role: 'participant', participantId: 'p1'});
+			const p1Ans = p1Proj.state.history[0]?.board?.answers;
+			// 自分の回答は見え、判定は確定前は見えない
+			expect(p1Ans?.p1?.text).toBe('秘密の回答1');
+			expect(p1Ans?.p1?.correct).toBeNull();
+			// 他人の回答は見えず、判定も見えない
+			expect(p1Ans?.p2?.text).toBe('');
+			expect(p1Ans?.p2?.correct).toBeNull();
+			expect(p1Ans?.p2?.submittedAt).toBe(2200);
+
+			// 3. 司会者 (host)
+			const hostProj = buzzerBoard.project(game, {role: 'host'});
+			const hAns = hostProj.state.history[0]?.board?.answers;
+			expect(hAns?.p1?.text).toBe('秘密の回答1');
+			expect(hAns?.p1?.correct).toBe(true);
+			expect(hAns?.p2?.text).toBe('秘密の回答2');
+			expect(hAns?.p2?.correct).toBe(false);
+
+			// 確定
+			game = exec(game, {type: 'boardConfirm'}, host, 2500);
+
+			// 確定後の投影
+			const monitorProjAfter = buzzerBoard.project(game, {role: 'monitor'});
+			const mAnsAfter = monitorProjAfter.state.history[0]?.board?.answers;
+			expect(mAnsAfter?.p1?.text).toBe('秘密の回答1');
+			expect(mAnsAfter?.p1?.correct).toBe(true);
+			expect(mAnsAfter?.p2?.text).toBe('秘密の回答2');
+			expect(mAnsAfter?.p2?.correct).toBe(false);
+			// 問題の答えも開示される
+			expect(monitorProjAfter.questions.length).toBe(1);
+			expect(monitorProjAfter.questions[0]?.answer).toBe('ノンジャンルの答え1');
+		});
+
+		it('取り消し (cancel コマンド) で問題開始前の得点・状態に完全に戻る', () => {
+			let game = createSampleGame(3, 2);
+			game = exec(game, {type: 'setCleared', participantId: 'p1', cleared: true}, host, 0);
+			game = exec(game, {type: 'setScore', participantId: 'p1', score: 5}, host, 0);
+
+			game = exec(game, {type: 'next', questionId: 'q1'}, host, 1000);
+			game = exec(game, {type: 'through'}, host, 2000);
+			game = exec(game, {type: 'boardSubmit', text: '正解'}, p1, 2100);
+			game = exec(game, {type: 'boardClose'}, host, 2200);
+			game = exec(game, {type: 'boardMark', participantId: 'p1', correct: true}, host, 2300);
+			game = exec(game, {type: 'boardConfirm'}, host, 2400);
+
+			// p1 の得点が 6 になっている
+			expect(game.state.scores.p1).toBe(6);
+
+			// 出題を取り消して未出題に戻す
+			game = exec(game, {type: 'cancel', returnToPool: true}, host, 2500);
+			expect(game.state.scores.p1).toBe(5);
+			expect(game.state.history.length).toBe(0);
+			expect(game.state.phase).toBe('waiting');
+		});
+	});
 });

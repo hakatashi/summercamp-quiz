@@ -44,10 +44,13 @@ export const ParticipantView = ({view, send, participantId}: ScreenProps<BuzzerB
 	const myCleared = isCleared(state, participantId ?? '');
 	const isMyGenreTurn = state.genreChooser === participantId;
 
+	const [boardInput, setBoardInput] = useState('');
+
 	const record = currentRecord(state);
 	const myBuzz = record?.buzzes.find(
 		(b) => b.participantId === participantId && b.status !== 'void',
 	);
+	const myBoardAns = record?.board?.answers[participantId ?? ''];
 
 	const canBuzz = isOpen(state) && !myCleared && myRest === 0 && !myBuzz;
 
@@ -74,6 +77,28 @@ export const ParticipantView = ({view, send, participantId}: ScreenProps<BuzzerB
 	const myOrder = myBuzz && pending ? pending.indexOf(myBuzz) + 1 : 0;
 
 	const status = (() => {
+		if (state.phase.startsWith('board-')) {
+			if (!myCleared) {
+				return {text: 'ボードクイズ中', tone: 'neutral'};
+			}
+			if (state.phase === 'board-answering') {
+				return {text: 'ボードクイズ回答中', tone: 'answering'};
+			}
+			if (state.phase === 'board-judging') {
+				return {text: '判定中', tone: 'waiting'};
+			}
+		}
+		if (state.phase === 'closed' && record?.board) {
+			if (myCleared) {
+				if (myBoardAns?.correct === true) {
+					return {text: 'ボードクイズ正解! (+1pt)', tone: 'correct'};
+				}
+				if (myBoardAns?.correct === false) {
+					return {text: 'ボードクイズ不正解', tone: 'wrong'};
+				}
+			}
+			return {text: '問題終了', tone: 'neutral'};
+		}
 		if (myCleared) {
 			return {text: '勝ち抜け!', tone: 'cleared'};
 		}
@@ -113,6 +138,18 @@ export const ParticipantView = ({view, send, participantId}: ScreenProps<BuzzerB
 		}
 	};
 
+	const onBoardSubmit = async (e: React.FormEvent) => {
+		e.preventDefault();
+		const text = boardInput.trim();
+		if (!text) return;
+		try {
+			await send({type: 'boardSubmit', text});
+			notify('回答を送信しました');
+		} catch (error) {
+			notify(error instanceof Error ? error.message : String(error), 'error');
+		}
+	};
+
 	const onChooseGenre = async (genre: Genre) => {
 		try {
 			await send({type: 'chooseGenre', genre});
@@ -125,6 +162,9 @@ export const ParticipantView = ({view, send, participantId}: ScreenProps<BuzzerB
 	const previous = previousRecord(state);
 	const previousQuestion = previous ? findQuestion(game, previous.questionId) : undefined;
 	const rank = standings(game).find((s) => s.participant.id === participantId)?.rank;
+
+	const isBoard = state.phase.startsWith('board-');
+	const isClosedBoard = state.phase === 'closed' && Boolean(record?.board);
 
 	return (
 		<div className={styles.container}>
@@ -162,16 +202,80 @@ export const ParticipantView = ({view, send, participantId}: ScreenProps<BuzzerB
 				{status.text}
 			</div>
 
-			<div className={styles.buttonArea}>
-				<BuzzButton
-					enabled={canBuzz}
-					armKey={`${state.history.length}:${record?.startedAt ?? ''}:${myBuzz ? 1 : 0}:${myRest}:${myCleared ? 1 : 0}`}
-					label="PUSH"
-					onPress={onPress}
-				/>
-				{disableReason && <div className={styles.disableReason}>{disableReason}</div>}
-				<p className={styles.hint}>PC では Enter キーかスペースキーでも押せます</p>
-			</div>
+			{isBoard ? (
+				!myCleared ? (
+					<div className={styles.boardSpectator}>
+						<h2 className={styles.boardSpectatorTitle}>ボードクイズ中</h2>
+						<p className={styles.boardSpectatorDesc}>
+							勝ち抜けた参加者によるボードクイズが行われています
+						</p>
+					</div>
+				) : state.phase === 'board-answering' ? (
+					<div className={styles.boardArea}>
+						<h2 className={styles.boardPrompt}>ボードクイズ: 回答を入力してください</h2>
+						<form className={styles.boardForm} onSubmit={onBoardSubmit}>
+							<div className={styles.boardInputRow}>
+								<input
+									className={styles.boardInput}
+									type="text"
+									maxLength={100}
+									value={boardInput}
+									onChange={(e) => setBoardInput(e.target.value)}
+									placeholder="回答を入力..."
+									autoFocus
+								/>
+								<button
+									type="submit"
+									className={styles.boardSubmitBtn}
+									disabled={boardInput.trim().length === 0}
+								>
+									送信
+								</button>
+							</div>
+							<div className={styles.boardCharCount}>{boardInput.trim().length} / 100 文字</div>
+						</form>
+						{myBoardAns && myBoardAns.submittedAt !== null && (
+							<div className={styles.boardSubmitted}>
+								<div className={styles.boardSubmittedLabel}>送信済み回答</div>
+								<div className={styles.boardSubmittedText}>{myBoardAns.text}</div>
+							</div>
+						)}
+					</div>
+				) : (
+					<div className={styles.boardArea}>
+						<h2 className={styles.boardPrompt}>判定中...</h2>
+						<p className={styles.muted}>司会者が判定を行っています。確定までお待ちください。</p>
+						<div className={styles.boardSubmitted}>
+							<div className={styles.boardSubmittedLabel}>あなたの回答</div>
+							<div className={styles.boardSubmittedText}>
+								{myBoardAns && myBoardAns.submittedAt !== null && myBoardAns.text
+									? myBoardAns.text
+									: '（無回答）'}
+							</div>
+						</div>
+					</div>
+				)
+			) : isClosedBoard && myCleared ? (
+				<div className={styles.boardResultCard} data-correct={String(myBoardAns?.correct === true)}>
+					<div className={styles.boardResultTitle}>
+						{myBoardAns?.correct === true ? '○ 正解! (+1pt)' : '× 不正解'}
+					</div>
+					<div className={styles.boardResultAnswer}>
+						あなたの回答: {myBoardAns?.text ? myBoardAns.text : '（無回答）'}
+					</div>
+				</div>
+			) : (
+				<div className={styles.buttonArea}>
+					<BuzzButton
+						enabled={canBuzz}
+						armKey={`${state.history.length}:${record?.startedAt ?? ''}:${myBuzz ? 1 : 0}:${myRest}:${myCleared ? 1 : 0}`}
+						label="PUSH"
+						onPress={onPress}
+					/>
+					{disableReason && <div className={styles.disableReason}>{disableReason}</div>}
+					<p className={styles.hint}>PC では Enter キーかスペースキーでも押せます</p>
+				</div>
+			)}
 
 			{isMyGenreTurn && (
 				<div className={styles.genreChooserOverlay}>

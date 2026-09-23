@@ -1,7 +1,14 @@
 import {describe, expect, it} from 'vitest';
 import type {BuzzerBoardState} from '../../../shared/modes/buzzer-board/index.ts';
 import type {Game, Participant} from '../../../shared/types.ts';
-import {isOpen, participantName, questionFontSize, scoreboardLayout, standings} from './helpers.ts';
+import {
+	isOpen,
+	normalizeAnswer,
+	participantName,
+	questionFontSize,
+	scoreboardLayout,
+	standings,
+} from './helpers.ts';
 
 const createParticipant = (id: string, name: string, joinedAt: number): Participant => ({
 	id,
@@ -133,5 +140,14 @@ describe('buzzer-board client helpers', () => {
 		};
 		expect(participantName(game, 'p1')).toBe('Alice');
 		expect(participantName(game, 'unknown')).toBe('(退出した参加者)');
+	});
+
+	it('normalizeAnswer は前後の空白と全角半角、大文字小文字を正規化する', () => {
+		expect(normalizeAnswer('  東京タワー  ')).toBe('東京タワー');
+		expect(normalizeAnswer('ＡＢＣ')).toBe('abc');
+		expect(normalizeAnswer('abc')).toBe('abc');
+		expect(normalizeAnswer('ｱｲｳｴｵ')).toBe('アイウエオ');
+		expect(normalizeAnswer('アイウエオ')).toBe('アイウエオ');
+		expect(normalizeAnswer(' １２３ ')).toBe('123');
 	});
 });

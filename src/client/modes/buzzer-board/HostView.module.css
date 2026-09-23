@@ -50,6 +50,16 @@
 	color: #92400e;
 }
 
+.phase[data-phase="board-answering"] {
+	background: #e0e7ff;
+	color: #3730a3;
+}
+
+.phase[data-phase="board-judging"] {
+	background: #fce7f3;
+	color: #9d174d;
+}
+
 .phase[data-phase="finished"] {
 	background: #dcfce7;
 	color: #166534;
@@ -371,4 +381,161 @@
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.boardTable {
+	width: 100%;
+	border-collapse: collapse;
+	margin-top: 12px;
+	font-size: 0.95rem;
+}
+
+.boardTable th,
+.boardTable td {
+	padding: 8px 10px;
+	text-align: left;
+	border-bottom: 1px solid var(--color-border);
+}
+
+.boardTable th {
+	color: var(--color-muted);
+	font-size: 0.85rem;
+}
+
+.boardParticipantName {
+	font-weight: 700;
+	white-space: nowrap;
+}
+
+.boardAnswerText {
+	font-weight: 600;
+	word-break: break-word;
+}
+
+.boardTime {
+	font-variant-numeric: tabular-nums;
+	color: var(--color-muted);
+	white-space: nowrap;
+}
+
+.judgeSwitch {
+	display: inline-flex;
+	border-radius: 6px;
+	overflow: hidden;
+	border: 1px solid #cbd5e1;
+}
+
+.judgeBtn {
+	padding: 4px 10px;
+	font-weight: 700;
+	font-size: 0.9rem;
+	border: none;
+	background: #f1f5f9;
+	color: #64748b;
+	cursor: pointer;
+	transition: background-color 100ms ease;
+}
+
+.judgeBtn + .judgeBtn {
+	border-left: 1px solid #cbd5e1;
+}
+
+.judgeBtn:hover {
+	background: #e2e8f0;
+}
+
+.judgeBtn.activeCorrect {
+	background: #22c55e;
+	color: #fff;
+}
+
+.judgeBtn.activeWrong {
+	background: #ef4444;
+	color: #fff;
+}
+
+.judgeBtn.activeNull {
+	background: #94a3b8;
+	color: #fff;
+}
+
+.markCorrect {
+	color: #16a34a;
+	font-weight: 700;
+}
+
+.markWrong {
+	color: #dc2626;
+	font-weight: 700;
+}
+
+.bulkJudgeArea {
+	margin: 12px 0;
+	padding: 10px 14px;
+	background: #f8fafc;
+	border: 1px dashed #cbd5e1;
+	border-radius: 8px;
+}
+
+.bulkJudgeLabel {
+	font-size: 0.85rem;
+	font-weight: 700;
+	color: var(--color-muted);
+	margin-bottom: 6px;
+}
+
+.bulkJudgeList {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.bulkJudgeItem {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.bulkJudgeText {
+	font-weight: 700;
+	font-size: 0.95rem;
+	color: #1e293b;
+}
+
+.bulkCorrectBtn {
+	padding: 3px 8px;
+	border-radius: 4px;
+	background: #dcfce7;
+	color: #15803d;
+	border: 1px solid #86efac;
+	font-size: 0.85rem;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.bulkCorrectBtn:hover {
+	background: #bbf7d0;
+}
+
+.bulkWrongBtn {
+	padding: 3px 8px;
+	border-radius: 4px;
+	background: #fee2e2;
+	color: #b91c1c;
+	border: 1px solid #fca5a5;
+	font-size: 0.85rem;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.bulkWrongBtn:hover {
+	background: #fecaca;
+}
+
+.boardActions {
+	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
+	margin-top: 12px;
 }

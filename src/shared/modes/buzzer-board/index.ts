@@ -8,6 +8,7 @@ import {
 } from '../../types.ts';
 import type {ModeDefinition} from '../types.ts';
 import {
+	type BoardAnswer,
 	type BuzzerBoardCommand,
 	type BuzzerBoardQuestionExtra,
 	type BuzzerBoardState,
@@ -27,8 +28,9 @@ type G = Game<BuzzerBoardState>;
 export const currentRecord = (state: BuzzerBoardState): QuestionRecord | null =>
 	state.phase === 'reading' ||
 	state.phase === 'answering' ||
-	state.phase === 'closed' ||
-	state.phase.startsWith('board-')
+	state.phase === 'board-answering' ||
+	state.phase === 'board-judging' ||
+	state.phase === 'closed'
 		? (state.history.at(-1) ?? null)
 		: null;
 
@@ -105,7 +107,12 @@ const apply = (game: G, command: BuzzerBoardCommand, ctx: CommandContext) => {
 	const {state} = game;
 	switch (command.type) {
 		case 'next': {
-			if (state.phase === 'reading' || state.phase === 'answering') {
+			if (
+				state.phase === 'reading' ||
+				state.phase === 'answering' ||
+				state.phase === 'board-answering' ||
+				state.phase === 'board-judging'
+			) {
 				throw new CommandError('出題中の問題を終了してから次に進んでください');
 			}
 			const unasked = unaskedQuestions(game);
@@ -159,6 +166,7 @@ const apply = (game: G, command: BuzzerBoardCommand, ctx: CommandContext) => {
 				buzzes: [],
 				result: null,
 				breakdown: null,
+				board: null,
 			});
 			state.phase = 'reading';
 			state.unaskedCounts = computeUnaskedCounts(game);
@@ -265,6 +273,19 @@ const apply = (game: G, command: BuzzerBoardCommand, ctx: CommandContext) => {
 			}
 			state.genreChooser = null;
 			state.nextGenre = {genre: computeAutoGenre(game), chosenBy: null};
+
+			const clearedParticipants = game.participants.filter((p) => state.cleared[p.id]);
+			if (clearedParticipants.length > 0) {
+				state.phase = 'board-answering';
+				record.result = 'through';
+				record.board = {
+					answers: {},
+					closedAt: null,
+					confirmedAt: null,
+				};
+				return;
+			}
+
 			endQuestion(state, record, 'through', ctx.now, null);
 			return;
 		}
@@ -355,6 +376,117 @@ const apply = (game: G, command: BuzzerBoardCommand, ctx: CommandContext) => {
 			state.genreChooser = null;
 			return;
 		}
+		case 'boardSubmit': {
+			if (ctx.actor.role !== 'participant') {
+				throw new CommandError('参加者だけが回答を送信できます');
+			}
+			const {participantId} = ctx.actor;
+			if (!state.cleared[participantId]) {
+				throw new CommandError('勝ち抜けていないため回答できません');
+			}
+			if (state.phase !== 'board-answering') {
+				throw new CommandError('現在は回答を受け付けていません');
+			}
+			const record = currentRecord(state);
+			if (!record?.board) {
+				throw new CommandError('ボードクイズ中の問題がありません');
+			}
+			const text = command.text.trim();
+			if (text.length === 0) {
+				throw new CommandError('回答を入力してください');
+			}
+			if (text.length > 100) {
+				throw new CommandError('回答は100文字以内で入力してください');
+			}
+			record.board.answers[participantId] = {
+				participantId,
+				text,
+				submittedAt: ctx.now,
+				correct: null,
+			};
+			return;
+		}
+		case 'boardClose': {
+			if (state.phase !== 'board-answering') {
+				throw new CommandError('回答受付中ではありません');
+			}
+			const record = currentRecord(state);
+			if (!record?.board) {
+				throw new CommandError('ボードクイズ中の問題がありません');
+			}
+			const clearedParticipants = game.participants.filter((p) => state.cleared[p.id]);
+			for (const p of clearedParticipants) {
+				if (!record.board.answers[p.id]) {
+					record.board.answers[p.id] = {
+						participantId: p.id,
+						text: '',
+						submittedAt: null,
+						correct: false,
+					};
+				}
+			}
+			record.board.closedAt = ctx.now;
+			state.phase = 'board-judging';
+			return;
+		}
+		case 'boardMark': {
+			if (state.phase !== 'board-judging') {
+				throw new CommandError('判定中ではありません');
+			}
+			const record = currentRecord(state);
+			if (!record?.board) {
+				throw new CommandError('ボードクイズ中の問題がありません');
+			}
+			const answer = record.board.answers[command.participantId];
+			if (!answer) {
+				throw new CommandError('回答が見つかりません');
+			}
+			answer.correct = command.correct;
+			return;
+		}
+		case 'boardConfirm': {
+			if (state.phase !== 'board-judging') {
+				throw new CommandError('判定中ではありません');
+			}
+			const record = currentRecord(state);
+			if (!record?.board) {
+				throw new CommandError('ボードクイズ中の問題がありません');
+			}
+			const clearedParticipants = game.participants.filter((p) => state.cleared[p.id]);
+			for (const p of clearedParticipants) {
+				const ans = record.board.answers[p.id];
+				if (!ans || ans.correct === null) {
+					throw new CommandError('未判定の回答が残っています');
+				}
+			}
+			for (const p of clearedParticipants) {
+				const ans = record.board.answers[p.id];
+				if (ans && ans.correct === true) {
+					state.scores[p.id] = (state.scores[p.id] ?? 0) + 1;
+				}
+			}
+			record.board.confirmedAt = ctx.now;
+			record.endedAt = ctx.now;
+			state.phase = 'closed';
+			return;
+		}
+		case 'boardReopen': {
+			if (state.phase !== 'board-judging') {
+				throw new CommandError('判定中ではありません');
+			}
+			const record = currentRecord(state);
+			if (!record?.board) {
+				throw new CommandError('ボードクイズ中の問題がありません');
+			}
+			record.board.closedAt = null;
+			for (const [id, ans] of Object.entries(record.board.answers)) {
+				if (ans.submittedAt === null) {
+					delete record.board.answers[id];
+				}
+			}
+			state.phase = 'board-answering';
+			return;
+		}
 	}
 };
 
@@ -384,6 +516,11 @@ export const buzzerBoard: ModeDefinition<BuzzerBoardState, BuzzerBoardCommand> =
 		setCleared: ['host'],
 		setStreak: ['host'],
 		setNextGenre: ['host'],
+		boardSubmit: ['participant'],
+		boardClose: ['host'],
+		boardMark: ['host'],
+		boardConfirm: ['host'],
+		boardReopen: ['host'],
 	},
 	initialState: () => ({
 		phase: 'waiting',
@@ -419,6 +556,9 @@ export const buzzerBoard: ModeDefinition<BuzzerBoardState, BuzzerBoardCommand> =
 				game.state.phase = 'reading';
 			}
 		}
+		if (record?.board) {
+			delete record.board.answers[participantId];
+		}
 	},
 	project(game, viewer) {
 		const unaskedCounts = computeUnaskedCounts(game);
@@ -432,27 +572,64 @@ export const buzzerBoard: ModeDefinition<BuzzerBoardState, BuzzerBoardCommand> =
 				state: stateWithCounts,
 			};
 		}
-		if (game.review !== null) {
-			const visible = new Set(
-				game.state.history
-					.filter((r) => r.result !== null && r.result !== 'cancelled')
-					.map((r) => r.questionId),
-			);
-			return {
-				...game,
-				state: stateWithCounts,
-				questions: game.questions.filter((q) => visible.has(q.id)).map((q) => ({...q, note: ''})),
-			};
-		}
 		// 参加者とモニターには、出題中や未出題の問題文・答えを送らない
-		const open = game.state.phase === 'reading' || game.state.phase === 'answering';
+		const open =
+			game.state.phase === 'reading' ||
+			game.state.phase === 'answering' ||
+			game.state.phase === 'board-answering' ||
+			game.state.phase === 'board-judging';
 		const openId = open ? game.state.history.at(-1)?.questionId : undefined;
 		const visible = new Set(
-			game.state.history.map((r) => r.questionId).filter((id) => id !== openId),
+			game.state.history
+				.filter((r) =>
+					game.review !== null
+						? r.result !== null && r.result !== 'cancelled'
+						: r.questionId !== openId,
+				)
+				.map((r) => r.questionId),
 		);
+
+		// ボード回答の投影
+		// 確定前: 回答本文と判定は司会者と本人だけに見せる。モニターと他の参加者には「回答済みかどうか」だけを見せる。
+		// 確定後: 全員に見せる。
+		const projectedHistory = stateWithCounts.history.map((record) => {
+			if (!record.board) {
+				return record;
+			}
+			const isConfirmed = record.board.confirmedAt !== null;
+			if (isConfirmed) {
+				return record;
+			}
+			const projectedAnswers: Record<string, BoardAnswer> = {};
+			for (const [pId, ans] of Object.entries(record.board.answers)) {
+				if (viewer.role === 'participant' && viewer.participantId === pId) {
+					projectedAnswers[pId] = {
+						...ans,
+						correct: null,
+					};
+				} else {
+					projectedAnswers[pId] = {
+						...ans,
+						text: '',
+						correct: null,
+					};
+				}
+			}
+			return {
+				...record,
+				board: {
+					...record.board,
+					answers: projectedAnswers,
+				},
+			};
+		});
+
 		return {
 			...game,
-			state: stateWithCounts,
+			state: {
+				...stateWithCounts,
+				history: projectedHistory,
+			},
 			questions: game.questions.filter((q) => visible.has(q.id)).map((q) => ({...q, note: ''})),
 		};
 	},
@@ -492,6 +669,18 @@ export const buzzerBoard: ModeDefinition<BuzzerBoardState, BuzzerBoardCommand> =
 				return '連答数を変更';
 			case 'setNextGenre':
 				return `次のジャンルを「${command.genre}」に変更`;
+			case 'boardSubmit':
+				return 'ボード回答送信';
+			case 'boardClose':
+				return 'ボード回答の締め切り';
+			case 'boardMark':
+				return `${name(command.participantId)} のボード回答を${
+					command.correct === null ? '未判定' : command.correct ? '正解' : '不正解'
+				}に仮判定`;
+			case 'boardConfirm':
+				return 'ボード回答の確定';
+			case 'boardReopen':
+				return 'ボード回答の再開';
 		}
 	},
 	askedQuestionIds(game) {

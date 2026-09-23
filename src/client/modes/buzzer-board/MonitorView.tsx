@@ -32,12 +32,23 @@ export const MonitorView = ({view}: ScreenProps<BuzzerBoardState>) => {
 	const number = questionNumber(state);
 	const winners = ranking.filter((s) => s.rank === 1);
 
+	const isBoard = state.phase.startsWith('board-');
+	const isClosedBoard = state.phase === 'closed' && Boolean(record?.board);
+	const clearedParticipants = game.participants.filter((p) => state.cleared[p.id]);
+	const boardAnswers = record?.board?.answers ?? {};
+	const submittedCount = clearedParticipants.filter(
+		(p) => boardAnswers[p.id]?.submittedAt !== null,
+	).length;
+
 	const headline = (() => {
 		switch (state.phase) {
 			case 'waiting':
 				return 'まもなく開始';
 			case 'finished':
 				return '全問終了';
+			case 'board-answering':
+			case 'board-judging':
+				return `第 ${number} 問 (ボード)`;
 			default:
 				return `第 ${number} 問`;
 		}
@@ -55,36 +66,95 @@ export const MonitorView = ({view}: ScreenProps<BuzzerBoardState>) => {
 
 			<main className={styles.main}>
 				<div className={styles.left}>
-					<section className={styles.panel} data-highlight={Boolean(answering)}>
-						<div className={styles.panelLabel}>回答権</div>
-						{record?.genre && <div className={styles.genreBadge}>{record.genre}</div>}
-						{answering ? (
-							<div className={styles.answeringName}>
-								{participantName(game, answering.participantId)}
+					{isBoard || isClosedBoard ? (
+						<section className={styles.panel}>
+							<div className={styles.panelLabel}>
+								{record?.board?.confirmedAt !== null ? 'ボードクイズ結果' : 'ボードクイズ'}
 							</div>
-						) : (
-							<div className={styles.placeholder}>
-								{state.phase === 'reading'
-									? '問題読み上げ中'
-									: record?.result
-										? describeResult(record.result)
-										: '—'}
+							{record?.genre && <div className={styles.genreBadge}>{record.genre}</div>}
+							<div className={styles.boardPanelContent}>
+								{record?.board?.confirmedAt !== null ? (
+									<ul className={styles.boardConfirmedList}>
+										{clearedParticipants.map((p) => {
+											const ans = boardAnswers[p.id];
+											const text =
+												ans && ans.submittedAt !== null && ans.text ? ans.text : '無回答';
+											const isCorrect = ans?.correct === true;
+											return (
+												<li
+													key={p.id}
+													className={styles.boardConfirmedItem}
+													data-correct={String(isCorrect)}
+												>
+													<span className={styles.boardMonitorItemName}>{p.name}</span>
+													<span className={styles.boardConfirmedAnswer}>{text}</span>
+													<span
+														className={styles.boardConfirmedMark}
+														data-correct={String(isCorrect)}
+													>
+														{isCorrect ? '○' : '×'}
+													</span>
+												</li>
+											);
+										})}
+									</ul>
+								) : (
+									<>
+										<div className={styles.boardMonitorHeadline}>
+											{state.phase === 'board-answering' ? '回答受付中' : '判定中'}
+										</div>
+										<div className={styles.boardMonitorSub}>
+											回答済み: {submittedCount} / {clearedParticipants.length} 人
+										</div>
+										<ul className={styles.boardMonitorList}>
+											{clearedParticipants.map((p) => {
+												const hasSubmitted = boardAnswers[p.id]?.submittedAt !== null;
+												return (
+													<li key={p.id} className={styles.boardMonitorItem}>
+														<span className={styles.boardMonitorItemName}>{p.name}</span>
+														<span className={styles.boardMonitorItemStatus}>
+															{hasSubmitted ? '回答済' : '未回答'}
+														</span>
+													</li>
+												);
+											})}
+										</ul>
+									</>
+								)}
 							</div>
-						)}
-						{buzzes.length > 0 && (
-							<ol className={styles.buzzes}>
-								{buzzes.map((buzz, index) => (
-									<li key={buzz.participantId} data-status={buzz.status}>
-										<span className={styles.buzzOrder}>{index + 1}</span>
-										<span className={styles.buzzName}>
-											{participantName(game, buzz.participantId)}
-										</span>
-										<span className={styles.buzzMark}>{markOf[buzz.status]}</span>
-									</li>
-								))}
-							</ol>
-						)}
-					</section>
+						</section>
+					) : (
+						<section className={styles.panel} data-highlight={Boolean(answering)}>
+							<div className={styles.panelLabel}>回答権</div>
+							{record?.genre && <div className={styles.genreBadge}>{record.genre}</div>}
+							{answering ? (
+								<div className={styles.answeringName}>
+									{participantName(game, answering.participantId)}
+								</div>
+							) : (
+								<div className={styles.placeholder}>
+									{state.phase === 'reading'
+										? '問題読み上げ中'
+										: record?.result
+											? describeResult(record.result)
+											: '—'}
+								</div>
+							)}
+							{buzzes.length > 0 && (
+								<ol className={styles.buzzes}>
+									{buzzes.map((buzz, index) => (
+										<li key={buzz.participantId} data-status={buzz.status}>
+											<span className={styles.buzzOrder}>{index + 1}</span>
+											<span className={styles.buzzName}>
+												{participantName(game, buzz.participantId)}
+											</span>
+											<span className={styles.buzzMark}>{markOf[buzz.status]}</span>
+										</li>
+									))}
+								</ol>
+							)}
+						</section>
+					)}
 
 					<section className={styles.panel}>
 						<div className={styles.panelLabel}>

@@ -346,4 +346,130 @@ describe('サーバー', () => {
 		expect(finishedView.game.state.phase).toBe('finished');
 		expect(finishedView.game.state.scores[alice.participantId]).toBe(2);
 	});
+
+	it('buzzer-board: スルーからボードクイズの回答・仮判定・確定と undo の流れが動く', async () => {
+		const host = await client();
+		const created = await call(host, 'createGame', {
+			mode: 'buzzer-board',
+			title: '早押しボードクイズ統合テスト',
+			password: PASSWORD,
+		});
+		expect(created.ok).toBe(true);
+		const {gameId} = created;
+		await call(host, 'subscribe', {gameId, role: 'host', password: PASSWORD});
+
+		const monitor = await client();
+		await call(monitor, 'subscribe', {gameId, role: 'monitor'});
+
+		const alice = await joinAs(gameId, 'Alice');
+
+		await call(host, 'command', {
+			type: 'questions.import',
+			replace: true,
+			questions: [{text: '問1', answer: '答1', extra: {genre: '科学'}}],
+		});
+
+		// Alice を勝ち抜けに設定
+		await call(host, 'command', {
+			type: 'setCleared',
+			participantId: alice.participantId,
+			cleared: true,
+		});
+		await call(host, 'command', {
+			type: 'setScore',
+			participantId: alice.participantId,
+			score: 5,
+		});
+
+		// 1問目出題
+		const hostReading = waitForView<BuzzerBoardState>(
+			host,
+			(v) => v.game.state.phase === 'reading',
+		);
+		await call(host, 'command', {type: 'next'});
+		await hostReading;
+
+		// スルー
+		const aliceBoardAnswering = waitForView<BuzzerBoardState>(
+			alice.socket,
+			(v) => v.game.state.phase === 'board-answering',
+		);
+		await call(host, 'command', {type: 'through'});
+		await aliceBoardAnswering;
+
+		// Alice が回答を送信
+		const hostSawAnswer = waitForView<BuzzerBoardState>(
+			host,
+			(v) =>
+				v.game.state.history[0]?.board?.answers[alice.participantId]?.text === 'アインシュタイン',
+		);
+		const monitorViewBeforeConfirm = waitForView<BuzzerBoardState>(
+			monitor,
+			(v) => v.game.state.history[0]?.board?.answers[alice.participantId]?.submittedAt !== null,
+		);
+		await call(alice.socket, 'command', {type: 'boardSubmit', text: 'アインシュタイン'});
+		const [hAnsView, mV] = await Promise.all([hostSawAnswer, monitorViewBeforeConfirm]);
+		expect(hAnsView.game.state.history[0]?.board?.answers[alice.participantId]?.text).toBe(
+			'アインシュタイン',
+		);
+
+		// 確定前: モニターには回答本文が届いていない
+		expect(mV.game.state.history[0]?.board?.answers[alice.participantId]?.text).toBe('');
+		expect(mV.game.state.history[0]?.board?.answers[alice.participantId]?.correct).toBeNull();
+
+		// 締め切り (boardClose)
+		const hostJudging = waitForView<BuzzerBoardState>(
+			host,
+			(v) => v.game.state.phase === 'board-judging',
+		);
+		await call(host, 'command', {type: 'boardClose'});
+		await hostJudging;
+
+		// 仮判定 (boardMark: correct: true)
+		const hostMarked = waitForView<BuzzerBoardState>(
+			host,
+			(v) => v.game.state.history[0]?.board?.answers[alice.participantId]?.correct === true,
+		);
+		await call(host, 'command', {
+			type: 'boardMark',
+			participantId: alice.participantId,
+			correct: true,
+		});
+		await hostMarked;
+
+		// 確定 (boardConfirm)
+		const hostConfirmed = waitForView<BuzzerBoardState>(
+			host,
+			(v) => v.game.state.phase === 'closed',
+		);
+		const monitorConfirmed = waitForView<BuzzerBoardState>(
+			monitor,
+			(v) => v.game.state.history[0]?.board?.confirmedAt !== null,
+		);
+		await call(host, 'command', {type: 'boardConfirm'});
+		const [hConfirmV, mConfirmV] = await Promise.all([hostConfirmed, monitorConfirmed]);
+
+		// 得点が 5 -> 6 に増加
+		expect(hConfirmV.game.state.scores[alice.participantId]).toBe(6);
+
+		// 確定後はモニターにも回答本文と判定が届く
+		expect(mConfirmV.game.state.history[0]?.board?.answers[alice.participantId]?.text).toBe(
+			'アインシュタイン',
+		);
+		expect(mConfirmV.game.state.history[0]?.board?.answers[alice.participantId]?.correct).toBe(
+			true,
+		);
+
+		// 取り消し (undo): 確定を取り消す
+		const hostUndo = waitForView<BuzzerBoardState>(
+			host,
+			(v) => v.game.state.phase === 'board-judging',
+		);
+		const undone = await call(host, 'undo');
+		expect(undone.ok).toBe(true);
+		const hUndoneV = await hostUndo;
+		// phase が board-judging に戻り、得点も 5 に戻る
+		expect(hUndoneV.game.state.phase).toBe('board-judging');
+		expect(hUndoneV.game.state.scores[alice.participantId]).toBe(5);
+	});
 });

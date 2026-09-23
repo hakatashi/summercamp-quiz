@@ -16,12 +16,21 @@ import {ReviewControls} from '../../components/ReviewControls.tsx';
 import {useNotify, useRun} from '../../components/Toast.tsx';
 import type {ScreenProps} from '../types.ts';
 import styles from './HostView.module.css';
-import {findQuestion, isOpen, participantName, questionNumber, standings} from './helpers.ts';
+import {
+	findQuestion,
+	isOpen,
+	normalizeAnswer,
+	participantName,
+	questionNumber,
+	standings,
+} from './helpers.ts';
 
 const phaseLabels: Record<string, string> = {
 	waiting: '開始前',
 	reading: '読み上げ中',
 	answering: '回答中',
+	'board-answering': 'ボード回答受付中',
+	'board-judging': 'ボード判定中',
 	closed: '問題終了',
 	finished: '全問終了',
 };
@@ -81,7 +90,34 @@ export const HostView = ({view, send, undo}: ScreenProps<BuzzerBoardState>) => {
 	const question = record ? findQuestion(game, record.questionId) : undefined;
 	const upcoming = unaskedQuestions(game);
 	const open = isOpen(state);
+	const isBoard = state.phase.startsWith('board-');
+	const isClosedBoard = state.phase === 'closed' && Boolean(record?.board);
 	const answering = record?.buzzes.find((b) => b.status === 'answering');
+
+	const clearedParticipants = game.participants.filter((p) => state.cleared[p.id]);
+	const boardAnswers = record?.board?.answers ?? {};
+	const submittedCount = clearedParticipants.filter(
+		(p) => boardAnswers[p.id]?.submittedAt !== null,
+	).length;
+	const unjudgedCount = clearedParticipants.filter(
+		(p) => !boardAnswers[p.id] || boardAnswers[p.id]?.correct === null,
+	).length;
+
+	const groupedDuplicates = (() => {
+		if (state.phase !== 'board-judging' && !isClosedBoard) return [];
+		const groups = new Map<string, {sampleText: string; participants: string[]}>();
+		for (const p of clearedParticipants) {
+			const ans = boardAnswers[p.id];
+			const rawText = ans && ans.submittedAt !== null ? ans.text : '';
+			const key = normalizeAnswer(rawText);
+			const group = groups.get(key) ?? {sampleText: rawText, participants: []};
+			group.participants.push(p.id);
+			groups.set(key, group);
+		}
+		return [...groups.entries()]
+			.filter(([_, g]) => g.participants.length >= 2)
+			.map(([normalized, g]) => ({normalized, ...g}));
+	})();
 
 	// 次に出題予定の問題 (同一ジャンルの未出題問題の先頭、または未出題の先頭)
 	const nextQuestion =
@@ -94,7 +130,7 @@ export const HostView = ({view, send, undo}: ScreenProps<BuzzerBoardState>) => {
 	shortcuts.current = {
 		o: () => answering && act({type: 'judge', correct: true}),
 		x: () => answering && act({type: 'judge', correct: false}),
-		n: () => !open && state.phase !== 'finished' && act({type: 'next'}),
+		n: () => !open && !isBoard && state.phase !== 'finished' && act({type: 'next'}),
 	};
 	useEffect(() => {
 		const onKeyDown = (event: KeyboardEvent) => {
@@ -132,11 +168,11 @@ export const HostView = ({view, send, undo}: ScreenProps<BuzzerBoardState>) => {
 	};
 
 	const number = questionNumber(state);
-	const previewQuestion = open || state.phase === 'closed' ? question : nextQuestion;
-	const currentGenre =
-		open || state.phase === 'closed'
-			? record?.genre
-			: ((previewQuestion?.extra?.genre as Genre | undefined) ?? state.nextGenre.genre);
+	const isCurrentQuestion = open || state.phase === 'closed' || isBoard;
+	const previewQuestion = isCurrentQuestion ? question : nextQuestion;
+	const currentGenre = isCurrentQuestion
+		? record?.genre
+		: ((previewQuestion?.extra?.genre as Genre | undefined) ?? state.nextGenre.genre);
 
 	const completedQuestionCount = state.history.filter(
 		(r) => r.result !== null && r.result !== 'cancelled',
@@ -203,7 +239,7 @@ export const HostView = ({view, send, undo}: ScreenProps<BuzzerBoardState>) => {
 					<section className={styles.card}>
 						<div className={styles.cardHeader}>
 							<h2>
-								{open || state.phase === 'closed'
+								{isCurrentQuestion
 									? `第 ${number} 問${state.phase === 'closed' ? ' (終了)' : ''}`
 									: '次の問題'}
 							</h2>
@@ -236,7 +272,7 @@ export const HostView = ({view, send, undo}: ScreenProps<BuzzerBoardState>) => {
 							{open ? (
 								<>
 									<button type="button" onClick={() => act({type: 'through'})}>
-										スルー (問題終了)
+										スルー {clearedParticipants.length > 0 ? '(ボードクイズへ)' : '(問題終了)'}
 									</button>
 									<button
 										type="button"
@@ -253,6 +289,10 @@ export const HostView = ({view, send, undo}: ScreenProps<BuzzerBoardState>) => {
 										出題を取り消して未出題に戻す
 									</button>
 								</>
+							) : isBoard ? (
+								<button type="button" onClick={() => onCancel(true)}>
+									出題を取り消して未出題に戻す
+								</button>
 							) : (
 								<>
 									<button
@@ -309,49 +349,212 @@ export const HostView = ({view, send, undo}: ScreenProps<BuzzerBoardState>) => {
 						</div>
 					</section>
 
-					<section className={styles.card}>
-						<h2>回答権</h2>
-						{answering ? (
-							<div className={styles.answering}>
-								<div className={styles.answeringName}>
-									{participantName(game, answering.participantId)}
-								</div>
-								<div className={styles.judgeButtons}>
-									<button
-										type="button"
-										className={styles.correct}
-										onClick={() => act({type: 'judge', correct: true})}
-									>
-										○ 正解 <kbd>O</kbd>
-									</button>
-									<button
-										type="button"
-										className={styles.wrong}
-										onClick={() => act({type: 'judge', correct: false})}
-									>
-										× 誤答 <kbd>X</kbd>
-									</button>
-								</div>
+					{isBoard || isClosedBoard ? (
+						<section className={styles.card}>
+							<div className={styles.cardHeader}>
+								<h2>ボードクイズ</h2>
+								<span className={styles.muted}>
+									{state.phase === 'board-answering'
+										? `回答受付中 (${submittedCount} / ${clearedParticipants.length} 人回答済み)`
+										: state.phase === 'board-judging'
+											? `判定中 (未判定 ${unjudgedCount} 件)`
+											: '確定済み'}
+								</span>
 							</div>
-						) : (
-							<p className={styles.muted}>
-								{state.phase === 'reading' ? 'ボタンが押されるのを待っています' : '—'}
-							</p>
-						)}
-						{record && record.buzzes.length > 0 && (
-							<ol className={styles.buzzList}>
-								{record.buzzes.map((buzz) => (
-									<li key={buzz.participantId} data-status={buzz.status}>
-										<span>{participantName(game, buzz.participantId)}</span>
-										<span className={styles.buzzMeta}>
-											+{((buzz.pressedAt - record.startedAt) / 1000).toFixed(2)}秒 ・{' '}
-											{buzzLabels[buzz.status]}
-										</span>
-									</li>
-								))}
-							</ol>
-						)}
-					</section>
+
+							<div className={styles.boardActions}>
+								{state.phase === 'board-answering' && (
+									<button
+										type="button"
+										className={styles.primary}
+										onClick={() => act({type: 'boardClose'})}
+									>
+										回答を締め切る
+									</button>
+								)}
+								{state.phase === 'board-judging' && (
+									<>
+										<button
+											type="button"
+											className={styles.primary}
+											onClick={() => act({type: 'boardConfirm'})}
+											disabled={unjudgedCount > 0}
+											title={unjudgedCount > 0 ? '未判定の回答が残っています' : undefined}
+										>
+											判定を確定する (得点加算)
+										</button>
+										<button type="button" onClick={() => act({type: 'boardReopen'})}>
+											締め切りを取り消す (回答再開)
+										</button>
+									</>
+								)}
+							</div>
+
+							{groupedDuplicates.length > 0 && (
+								<div className={styles.bulkJudgeArea}>
+									<div className={styles.bulkJudgeLabel}>同じ回答をまとめて判定:</div>
+									<div className={styles.bulkJudgeList}>
+										{groupedDuplicates.map((group) => (
+											<div key={group.normalized} className={styles.bulkJudgeItem}>
+												<span className={styles.bulkJudgeText}>
+													「{group.sampleText || '(無回答)'}」({group.participants.length}人)
+												</span>
+												<button
+													type="button"
+													className={styles.bulkCorrectBtn}
+													onClick={() => {
+														for (const pId of group.participants) {
+															void act({type: 'boardMark', participantId: pId, correct: true});
+														}
+													}}
+												>
+													○ 全員正解
+												</button>
+												<button
+													type="button"
+													className={styles.bulkWrongBtn}
+													onClick={() => {
+														for (const pId of group.participants) {
+															void act({type: 'boardMark', participantId: pId, correct: false});
+														}
+													}}
+												>
+													× 全員不正解
+												</button>
+											</div>
+										))}
+									</div>
+								</div>
+							)}
+
+							{clearedParticipants.length === 0 ? (
+								<p className={styles.muted}>勝ち抜けた参加者がいません</p>
+							) : (
+								<table className={styles.boardTable}>
+									<thead>
+										<tr>
+											<th>参加者</th>
+											<th>回答</th>
+											<th>送信時刻</th>
+											<th>判定</th>
+										</tr>
+									</thead>
+									<tbody>
+										{clearedParticipants.map((p) => {
+											const ans = boardAnswers[p.id];
+											const hasSubmitted = ans && ans.submittedAt !== null;
+											return (
+												<tr key={p.id}>
+													<td className={styles.boardParticipantName}>{p.name}</td>
+													<td className={styles.boardAnswerText}>
+														{hasSubmitted ? (
+															ans.text
+														) : state.phase === 'board-answering' ? (
+															<span className={styles.muted}>未送信</span>
+														) : (
+															<span className={styles.muted}>（無回答）</span>
+														)}
+													</td>
+													<td className={styles.boardTime}>
+														{ans?.submittedAt != null && record?.startedAt
+															? `+${((ans.submittedAt - record.startedAt) / 1000).toFixed(1)}s`
+															: '—'}
+													</td>
+													<td>
+														{state.phase === 'board-judging' ? (
+															<div className={styles.judgeSwitch}>
+																<button
+																	type="button"
+																	className={`${styles.judgeBtn} ${ans?.correct === true ? styles.activeCorrect : ''}`}
+																	onClick={() =>
+																		act({type: 'boardMark', participantId: p.id, correct: true})
+																	}
+																>
+																	○
+																</button>
+																<button
+																	type="button"
+																	className={`${styles.judgeBtn} ${ans?.correct === false ? styles.activeWrong : ''}`}
+																	onClick={() =>
+																		act({type: 'boardMark', participantId: p.id, correct: false})
+																	}
+																>
+																	×
+																</button>
+																<button
+																	type="button"
+																	className={`${styles.judgeBtn} ${ans?.correct === null ? styles.activeNull : ''}`}
+																	onClick={() =>
+																		act({type: 'boardMark', participantId: p.id, correct: null})
+																	}
+																>
+																	未
+																</button>
+															</div>
+														) : (
+															<span>
+																{ans?.correct === true ? (
+																	<span className={styles.markCorrect}>○ 正解</span>
+																) : ans?.correct === false ? (
+																	<span className={styles.markWrong}>× 不正解</span>
+																) : (
+																	<span className={styles.muted}>未判定</span>
+																)}
+															</span>
+														)}
+													</td>
+												</tr>
+											);
+										})}
+									</tbody>
+								</table>
+							)}
+						</section>
+					) : (
+						<section className={styles.card}>
+							<h2>回答権</h2>
+							{answering ? (
+								<div className={styles.answering}>
+									<div className={styles.answeringName}>
+										{participantName(game, answering.participantId)}
+									</div>
+									<div className={styles.judgeButtons}>
+										<button
+											type="button"
+											className={styles.correct}
+											onClick={() => act({type: 'judge', correct: true})}
+										>
+											○ 正解 <kbd>O</kbd>
+										</button>
+										<button
+											type="button"
+											className={styles.wrong}
+											onClick={() => act({type: 'judge', correct: false})}
+										>
+											× 誤答 <kbd>X</kbd>
+										</button>
+									</div>
+								</div>
+							) : (
+								<p className={styles.muted}>
+									{state.phase === 'reading' ? 'ボタンが押されるのを待っています' : '—'}
+								</p>
+							)}
+							{record && record.buzzes.length > 0 && (
+								<ol className={styles.buzzList}>
+									{record.buzzes.map((buzz) => (
+										<li key={buzz.participantId} data-status={buzz.status}>
+											<span>{participantName(game, buzz.participantId)}</span>
+											<span className={styles.buzzMeta}>
+												+{((buzz.pressedAt - record.startedAt) / 1000).toFixed(2)}秒 ・{' '}
+												{buzzLabels[buzz.status]}
+											</span>
+										</li>
+									))}
+								</ol>
+							)}
+						</section>
+					)}
 				</div>
 
 				<div className={styles.right}>

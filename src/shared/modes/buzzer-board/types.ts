@@ -32,6 +32,19 @@ export interface ScoreBreakdown {
 	bonus: number;
 }
 
+export interface BoardAnswer {
+	participantId: string;
+	text: string;
+	submittedAt: number | null;
+	correct: boolean | null;
+}
+
+export interface BoardRecord {
+	answers: Record<string, BoardAnswer>;
+	closedAt: number | null;
+	confirmedAt: number | null;
+}
+
 export interface QuestionRecord {
 	questionId: string;
 	startedAt: number;
@@ -46,9 +59,17 @@ export interface QuestionRecord {
 	buzzes: Buzz[];
 	result: QuestionResult | null;
 	breakdown: ScoreBreakdown | null;
+	board: BoardRecord | null;
 }
 
-export type Phase = 'waiting' | 'reading' | 'answering' | 'closed' | 'finished' | `board-${string}`;
+export type Phase =
+	| 'waiting'
+	| 'reading'
+	| 'answering'
+	| 'board-answering'
+	| 'board-judging'
+	| 'closed'
+	| 'finished';
 
 export interface BuzzerBoardState {
 	phase: Phase;
@@ -83,6 +104,15 @@ export const buzzerBoardCommandSchema = z.discriminatedUnion('type', [
 		count: z.number().int().min(0),
 	}),
 	z.object({type: z.literal('setNextGenre'), genre: genreSchema}),
+	z.object({type: z.literal('boardSubmit'), text: z.string()}),
+	z.object({type: z.literal('boardClose')}),
+	z.object({
+		type: z.literal('boardMark'),
+		participantId: z.string(),
+		correct: z.boolean().nullable(),
+	}),
+	z.object({type: z.literal('boardConfirm')}),
+	z.object({type: z.literal('boardReopen')}),
 ]);
 
 export type BuzzerBoardCommand = z.infer<typeof buzzerBoardCommandSchema>;

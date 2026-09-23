@@ -69,3 +69,10 @@ export const scoreboardLayout = (count: number, available = 860) => {
 /** 問題文の長さに応じて文字の大きさを変える */
 export const questionFontSize = (text: string) =>
 	text.length > 150 ? 30 : text.length > 100 ? 36 : text.length > 60 ? 42 : 48;
+
+/** ボードクイズ中 (回答受付中・判定中) か */
+export const isBoardPhase = (phase: string) =>
+	phase === 'board-answering' || phase === 'board-judging';
+
+/** 前後の空白と全角半角を正規化して回答文を比べるための正規化 */
+export const normalizeAnswer = (text: string) => text.trim().normalize('NFKC').toLowerCase();
