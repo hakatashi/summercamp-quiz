@@ -9,23 +9,12 @@ import {
 	isOpen,
 	participantName,
 	previousRecord,
+	questionFontSize,
 	questionNumber,
+	scoreboardLayout,
 	standings,
 } from './helpers.ts';
 import styles from './MonitorView.module.css';
-
-/** 得点表が縦に収まるよう、人数から行の高さと列数を決める */
-const scoreboardLayout = (count: number) => {
-	const available = 860;
-	const columns = count > 14 ? 2 : 1;
-	const rows = Math.max(1, Math.ceil(count / columns));
-	const rowHeight = Math.min(96, Math.floor(available / rows));
-	return {columns, rows, rowHeight};
-};
-
-/** 問題文の長さに応じて文字の大きさを変える */
-const questionFontSize = (text: string) =>
-	text.length > 150 ? 30 : text.length > 100 ? 36 : text.length > 60 ? 42 : 48;
 
 const markOf = {correct: '○', wrong: '×', answering: '', waiting: '', void: ''} as const;
 

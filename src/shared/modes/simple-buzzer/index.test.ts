@@ -305,4 +305,45 @@ describe('simple-buzzer', () => {
 		expect(participantGame.questions.map((q) => q.id)).toEqual(['q1']);
 		expect(participantGame.questions[0]?.note).toBe('');
 	});
+
+	it('取り消した問題 (cancelled) は感想戦中のモニターと参加者には開示されない', () => {
+		run({
+			type: 'questions.import',
+			replace: true,
+			questions: [
+				{id: 'q1', text: '問題1', answer: '答え1'},
+				{id: 'q2', text: '問題2', answer: '答え2'},
+				{id: 'q3', text: '問題3', answer: '答え3'},
+			],
+		});
+
+		// 1問目: 終了 (正解)
+		run({type: 'next'});
+		buzz('a');
+		run({type: 'judge', correct: true});
+
+		// 2問目: 出題してキャンセル (プールに戻さない)
+		run({type: 'next'});
+		run({type: 'cancel', returnToPool: false});
+
+		// 3問目: 出題してスルーで終了
+		run({type: 'next', questionId: 'q3'});
+		run({type: 'close'});
+
+		// 感想戦を開始
+		run({type: 'review.start'});
+
+		// reviewItems は q1 と q3 のみ
+		expect(simpleBuzzer.reviewItems?.(game)).toEqual([
+			{questionId: 'q1', recordIndex: 0},
+			{questionId: 'q3', recordIndex: 2},
+		]);
+
+		// モニターに見える問題も q1 と q3 のみ (取り消した q2 は見えない)
+		const monitorGame = projectGame(game, {role: 'monitor'});
+		expect(monitorGame.questions.map((q) => q.id)).toEqual(['q1', 'q3']);
+
+		const participantGame = projectGame(game, {role: 'participant', participantId: 'a'});
+		expect(participantGame.questions.map((q) => q.id)).toEqual(['q1', 'q3']);
+	});
 });

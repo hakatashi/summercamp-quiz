@@ -295,7 +295,11 @@ export const simpleBuzzer: ModeDefinition<SimpleBuzzerState, SimpleBuzzerCommand
 			return game;
 		}
 		if (game.review !== null) {
-			const visible = new Set(game.state.history.map((r) => r.questionId));
+			const visible = new Set(
+				game.state.history
+					.filter((r) => r.result !== null && r.result !== 'cancelled')
+					.map((r) => r.questionId),
+			);
 			return {
 				...game,
 				questions: game.questions.filter((q) => visible.has(q.id)).map((q) => ({...q, note: ''})),
