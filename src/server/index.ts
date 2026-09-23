@@ -1,9 +1,10 @@
 import {networkInterfaces} from 'node:os';
 import {resolve} from 'node:path';
+import {DEFAULT_SERVER_PORT, DEV_CLIENT_PORT} from '../shared/ports.ts';
 import {createApp} from './app.ts';
 
 const production = process.env.NODE_ENV === 'production';
-const port = Number(process.env.PORT ?? 3000);
+const port = Number(process.env.PORT ?? DEFAULT_SERVER_PORT);
 const dataDir = resolve(process.env.DATA_DIR ?? 'data');
 
 const app = createApp({
@@ -14,8 +15,8 @@ const app = createApp({
 
 await app.listen(port, '0.0.0.0');
 
-// 開発時は Vite (5173) 経由でアクセスする
-const publicPort = production ? port : 5173;
+// 開発時は Vite 経由でアクセスする
+const publicPort = production ? port : DEV_CLIENT_PORT;
 const addresses = Object.values(networkInterfaces())
 	.flat()
 	.filter((info) => info && info.family === 'IPv4' && !info.internal)

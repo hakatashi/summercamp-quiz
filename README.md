@@ -23,10 +23,10 @@
 ```sh
 npm install
 
-# 開発 (Vite: http://<このPCのIP>:5173/ 、API サーバー: 3000 番)
+# 開発 (Vite: http://<このPCのIP>:47352/ 、API サーバー: 38421 番)
 npm run dev
 
-# 本番 (ビルドしてから、3000 番の1つのポートで配信)
+# 本番 (ビルドしてから、38421 番の1つのポートで配信)
 npm run build
 HOST_PASSWORD=ひみつ npm start
 ```
@@ -37,7 +37,7 @@ HOST_PASSWORD=ひみつ npm start
 
 | 名前 | 既定値 | 説明 |
 |---|---|---|
-| `PORT` | `3000` | サーバーのポート (開発時は Vite の proxy 先にもなる) |
+| `PORT` | `38421` | サーバーのポート (開発時は Vite の proxy 先にもなる) |
 | `HOST_PASSWORD` | なし | 司会者画面・問題編集・ゲーム管理のパスワード。未設定なら誰でも開ける |
 | `DATA_DIR` | `data` | SQLite のデータベースを置くディレクトリ |
 
