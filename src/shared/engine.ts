@@ -81,6 +81,7 @@ export const parseCommand = (
 export const fillCommandIds = <C extends CommonCommand | ModeCommand>(
 	command: C,
 	generateId: () => string,
+	generateSeed: () => number = () => Math.floor(Math.random() * 0x7fffffff),
 ): C => {
 	if (command.type === 'questions.add') {
 		const c = command as Extract<CommonCommand, {type: 'questions.add'}>;
@@ -92,6 +93,12 @@ export const fillCommandIds = <C extends CommonCommand | ModeCommand>(
 			...c,
 			questions: c.questions.map((q) => ({...q, id: q.id ?? generateId()})),
 		} as C;
+	}
+	if (
+		command.type === 'next' &&
+		(command as unknown as Record<string, unknown>).seed === undefined
+	) {
+		return {...command, seed: generateSeed()} as C;
 	}
 	return command;
 };

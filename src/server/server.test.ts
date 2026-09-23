@@ -1,5 +1,6 @@
 import {io as connect, type Socket} from 'socket.io-client';
 import {afterEach, beforeEach, describe, expect, it} from 'vitest';
+import type {BuzzerBoardState} from '../shared/modes/buzzer-board/index.ts';
 import type {SimpleBuzzerState} from '../shared/modes/simple-buzzer/index.ts';
 import type {ClientToServerEvents, ServerToClientEvents} from '../shared/protocol.ts';
 import type {GameView} from '../shared/types.ts';
@@ -28,15 +29,15 @@ describe('サーバー', () => {
 	};
 
 	/** 条件を満たす game イベントを待つ */
-	const waitForView = (
+	const waitForView = <S = SimpleBuzzerState>(
 		socket: ClientSocket,
-		predicate: (view: GameView<SimpleBuzzerState>) => boolean,
+		predicate: (view: GameView<S>) => boolean,
 	) =>
-		new Promise<GameView<SimpleBuzzerState>>((resolve) => {
+		new Promise<GameView<S>>((resolve) => {
 			const listener = (view: GameView) => {
-				if (predicate(view as GameView<SimpleBuzzerState>)) {
+				if (predicate(view as GameView<S>)) {
 					socket.off('game', listener);
-					resolve(view as GameView<SimpleBuzzerState>);
+					resolve(view as GameView<S>);
 				}
 			};
 			socket.on('game', listener);
@@ -252,5 +253,97 @@ describe('サーバー', () => {
 		expect(aliceVEnd.game.review).toBeNull();
 		// 得点や本戦状態は変わっていない
 		expect(aliceVEnd.game.state.scores[alice.participantId]).toBe(1);
+	});
+
+	it('buzzer-board: 司会者画面と参加者画面で1ゲームを最後まで進められる', async () => {
+		const host = await client();
+		const created = await call(host, 'createGame', {
+			mode: 'buzzer-board',
+			title: '早押しボードテスト',
+			password: PASSWORD,
+		});
+		expect(created.ok).toBe(true);
+		const {gameId} = created;
+		await call(host, 'subscribe', {gameId, role: 'host', password: PASSWORD});
+
+		const alice = await joinAs(gameId, 'Alice');
+		const bob = await joinAs(gameId, 'Bob');
+
+		// 3問インポート (科学1問、スポーツ2問)
+		await call(host, 'command', {
+			type: 'questions.import',
+			replace: true,
+			questions: [
+				{text: 'スポーツ問1', answer: 'スポーツ答1', extra: {genre: 'スポーツ'}},
+				{text: 'スポーツ問2', answer: 'スポーツ答2', extra: {genre: 'スポーツ'}},
+				{text: '科学問1', answer: '科学答1', extra: {genre: '科学'}},
+			],
+		});
+
+		const hostView1 = waitForView<BuzzerBoardState>(host, (v) => v.game.state.phase === 'reading');
+		await call(host, 'command', {type: 'next'});
+		const v1 = await hostView1;
+		expect(v1.game.state.history[0]?.genre).toBe('スポーツ');
+
+		// Alice が押下して正解
+		await call(alice.socket, 'command', {type: 'buzz', pressedAt: Date.now()});
+		const hostViewAfterQ1 = waitForView<BuzzerBoardState>(
+			host,
+			(v) => v.game.state.genreChooser === alice.participantId,
+		);
+		await call(host, 'command', {type: 'judge', correct: true});
+		const vAfterQ1 = await hostViewAfterQ1;
+		expect(vAfterQ1.game.state.scores[alice.participantId]).toBe(1);
+
+		// Alice が「科学」を選択
+		const hostViewGenreChosen = waitForView<BuzzerBoardState>(
+			host,
+			(v) => v.game.state.nextGenre.genre === '科学',
+		);
+		await call(alice.socket, 'command', {type: 'chooseGenre', genre: '科学'});
+		await hostViewGenreChosen;
+
+		// 2問目出題: 「科学」が出題される
+		const hostView2 = waitForView<BuzzerBoardState>(host, (v) => v.game.state.phase === 'reading');
+		await call(host, 'command', {type: 'next'});
+		const v2 = await hostView2;
+		expect(v2.game.state.history[1]?.genre).toBe('科学');
+
+		// Bob が押下して誤答 (連答はリセットされる)
+		await call(bob.socket, 'command', {type: 'buzz', pressedAt: Date.now()});
+		const hostViewAfterQ2 = waitForView<BuzzerBoardState>(
+			host,
+			(v) => v.game.state.rest[bob.participantId] === 2,
+		);
+		await call(host, 'command', {type: 'judge', correct: false});
+		await hostViewAfterQ2;
+
+		// 3問目出題: 最後の1問 (スポーツ問2)
+		const hostView3 = waitForView<BuzzerBoardState>(host, (v) => v.game.state.phase === 'reading');
+		await call(host, 'command', {type: 'next'});
+		await hostView3;
+
+		// Bob は休み中なので押せない
+		const bobBuzz = await call(bob.socket, 'command', {type: 'buzz', pressedAt: Date.now()});
+		expect(bobBuzz.ok).toBe(false);
+
+		// Alice が押下して正解 (直前が誤答なので連答ボーナスなし、+1 で計2点)
+		await call(alice.socket, 'command', {type: 'buzz', pressedAt: Date.now()});
+		const hostViewAfterQ3 = waitForView<BuzzerBoardState>(
+			host,
+			(v) => v.game.state.scores[alice.participantId] === 2,
+		);
+		await call(host, 'command', {type: 'judge', correct: true});
+		await hostViewAfterQ3;
+
+		// 次の問題へ -> 全問終了
+		const hostViewFinished = waitForView<BuzzerBoardState>(
+			host,
+			(v) => v.game.state.phase === 'finished',
+		);
+		await call(host, 'command', {type: 'next'});
+		const finishedView = await hostViewFinished;
+		expect(finishedView.game.state.phase).toBe('finished');
+		expect(finishedView.game.state.scores[alice.participantId]).toBe(2);
 	});
 });

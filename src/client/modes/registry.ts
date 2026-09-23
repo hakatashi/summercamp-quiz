@@ -1,4 +1,5 @@
 import type {ModeId} from '../../shared/types.ts';
+import {buzzerBoardScreens} from './buzzer-board/index.ts';
 import {simpleBuzzerScreens} from './simple-buzzer/index.ts';
 import type {ModeScreens} from './types.ts';
 
@@ -6,4 +7,5 @@ import type {ModeScreens} from './types.ts';
 // biome-ignore lint/suspicious/noExplicitAny: 企画ごとに state の型が違う
 export const screens: Record<ModeId, ModeScreens<any>> = {
 	'simple-buzzer': simpleBuzzerScreens,
+	'buzzer-board': buzzerBoardScreens,
 };

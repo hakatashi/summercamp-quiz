@@ -1,0 +1,263 @@
+.container {
+	display: flex;
+	flex-direction: column;
+	min-height: 100dvh;
+	padding: max(12px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+	gap: 12px;
+	background: #101828;
+	color: #fff;
+	overscroll-behavior: none;
+	user-select: none;
+	-webkit-user-select: none;
+}
+
+.header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 12px;
+	padding: 4px 6px;
+	border-radius: var(--radius);
+	transition: background-color 150ms ease;
+	cursor: pointer;
+}
+
+.header:active {
+	background: rgb(255 255 255 / 0.05);
+}
+
+.nameGroup {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.name {
+	font-size: 1.3rem;
+	font-weight: 700;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.diagBadge {
+	font-size: 0.7rem;
+	padding: 2px 6px;
+	border-radius: 999px;
+	background: rgb(255 255 255 / 0.1);
+	color: #94a3b8;
+	border: 1px solid rgb(255 255 255 / 0.15);
+	cursor: pointer;
+	flex: none;
+}
+
+.diagBadge:hover {
+	background: rgb(255 255 255 / 0.2);
+	color: #fff;
+}
+
+.score {
+	display: flex;
+	align-items: baseline;
+	gap: 4px;
+	flex: none;
+}
+
+.scoreValue {
+	font-size: 2.4rem;
+	font-weight: 800;
+	font-variant-numeric: tabular-nums;
+}
+
+.scoreUnit {
+	font-size: 1rem;
+	opacity: 0.7;
+}
+
+.rank {
+	margin-left: 8px;
+	font-size: 1rem;
+	opacity: 0.8;
+}
+
+.clearedTag {
+	display: inline-block;
+	font-size: 0.75rem;
+	font-weight: 700;
+	padding: 2px 8px;
+	border-radius: 999px;
+	background: #15803d;
+	color: #fff;
+	margin-left: 6px;
+}
+
+.status {
+	padding: 10px;
+	border-radius: var(--radius);
+	text-align: center;
+	font-size: 1.25rem;
+	font-weight: 700;
+	background: #1f2a44;
+}
+
+.status[data-tone="answering"] {
+	background: #d97706;
+	animation: pulse 1s ease-in-out infinite alternate;
+}
+
+.status[data-tone="waiting"] {
+	background: #2563eb;
+}
+
+.status[data-tone="correct"] {
+	background: #15803d;
+}
+
+.status[data-tone="wrong"] {
+	background: #b91c1c;
+}
+
+.status[data-tone="rest"] {
+	background: #991b1b;
+}
+
+.status[data-tone="cleared"] {
+	background: #047857;
+}
+
+@keyframes pulse {
+	from {
+		opacity: 0.85;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+.buttonArea {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	min-height: 280px;
+}
+
+.disableReason {
+	font-size: 1.1rem;
+	font-weight: 700;
+	color: #f87171;
+	margin-top: 12px;
+	text-align: center;
+}
+
+.hint {
+	margin-top: 12px;
+	font-size: 0.85rem;
+	color: #64748b;
+	text-align: center;
+}
+
+.previous {
+	background: rgb(255 255 255 / 0.05);
+	padding: 12px 14px;
+	border-radius: var(--radius);
+	font-size: 0.95rem;
+}
+
+.previousLabel {
+	font-size: 0.75rem;
+	color: #94a3b8;
+	font-weight: 700;
+	text-transform: uppercase;
+	margin-bottom: 4px;
+}
+
+.previousText {
+	margin-bottom: 4px;
+	line-height: 1.4;
+}
+
+.previousAnswer {
+	color: #38bdf8;
+	font-weight: 700;
+}
+
+.genreChooserOverlay {
+	position: fixed;
+	inset: 0;
+	background: rgb(0 0 0 / 0.8);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 16px;
+	z-index: 100;
+	backdrop-filter: blur(4px);
+}
+
+.genreChooserModal {
+	background: #1e293b;
+	border-radius: 12px;
+	padding: 20px;
+	max-width: 600px;
+	width: 100%;
+	box-shadow: 0 10px 25px rgb(0 0 0 / 0.5);
+	text-align: center;
+}
+
+.genreChooserTitle {
+	font-size: 1.3rem;
+	font-weight: 700;
+	margin: 0 0 8px;
+	color: #f8fafc;
+}
+
+.genreChooserSub {
+	font-size: 0.9rem;
+	color: #94a3b8;
+	margin: 0 0 16px;
+}
+
+.genreGrid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+	gap: 10px;
+}
+
+.genreBtn {
+	padding: 12px 8px;
+	border-radius: 8px;
+	background: #334155;
+	color: #f8fafc;
+	font-size: 0.95rem;
+	font-weight: 700;
+	border: 1px solid #475569;
+	cursor: pointer;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+	transition:
+		background-color 150ms ease,
+		transform 100ms ease;
+}
+
+.genreBtn:hover:not(:disabled) {
+	background: var(--color-primary);
+	border-color: var(--color-primary);
+	transform: translateY(-2px);
+}
+
+.genreBtn:disabled {
+	opacity: 0.35;
+	cursor: not-allowed;
+	background: #1e293b;
+	border-color: #334155;
+}
+
+.genreBtnCount {
+	font-size: 0.75rem;
+	font-weight: 400;
+	opacity: 0.8;
+}

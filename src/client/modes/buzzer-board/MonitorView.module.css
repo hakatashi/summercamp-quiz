@@ -1,0 +1,292 @@
+.stage {
+	width: 100%;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	padding: 32px 40px;
+	gap: 24px;
+	background:
+		radial-gradient(circle at 20% 0%, #1e3a8a 0%, transparent 55%),
+		radial-gradient(circle at 100% 100%, #581c87 0%, transparent 50%), #0b1120;
+	color: #f8fafc;
+}
+
+.header {
+	flex: none;
+	height: 96px;
+	display: grid;
+	grid-template-columns: 1fr auto 1fr;
+	align-items: center;
+	gap: 24px;
+}
+
+.title {
+	font-size: 40px;
+	font-weight: 700;
+	opacity: 0.85;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.headline {
+	font-size: 72px;
+	font-weight: 900;
+	letter-spacing: 0.05em;
+}
+
+.progress {
+	justify-self: end;
+	font-size: 36px;
+	opacity: 0.8;
+	font-variant-numeric: tabular-nums;
+}
+
+.main {
+	flex: 1;
+	min-height: 0;
+	display: grid;
+	grid-template-columns: 1180px 1fr;
+	gap: 32px;
+}
+
+.left {
+	min-height: 0;
+	display: grid;
+	grid-template-rows: 1fr 1fr;
+	gap: 32px;
+}
+
+.panel {
+	position: relative;
+	min-height: 0;
+	overflow: hidden;
+	padding: 56px 32px 24px;
+	border-radius: 24px;
+	background: rgb(255 255 255 / 0.07);
+	border: 2px solid rgb(255 255 255 / 0.12);
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+}
+
+.panel[data-highlight="true"] {
+	border-color: #f59e0b;
+	background: rgb(245 158 11 / 0.15);
+}
+
+.panelLabel {
+	position: absolute;
+	top: 14px;
+	left: 28px;
+	font-size: 28px;
+	font-weight: 700;
+	opacity: 0.6;
+}
+
+.placeholder {
+	font-size: 56px;
+	font-weight: 700;
+	opacity: 0.5;
+	text-align: center;
+}
+
+.answeringName {
+	font-size: 110px;
+	font-weight: 900;
+	text-align: center;
+	line-height: 1.2;
+	color: #fcd34d;
+}
+
+.genreBadge {
+	display: inline-block;
+	font-size: 32px;
+	font-weight: 700;
+	padding: 6px 18px;
+	border-radius: 999px;
+	background: #7c3aed;
+	color: #fff;
+	margin-bottom: 12px;
+	align-self: center;
+}
+
+.buzzes {
+	margin: 16px 0 0;
+	padding: 0;
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.buzzes li {
+	display: grid;
+	grid-template-columns: 48px 1fr 48px;
+	align-items: center;
+	gap: 16px;
+	padding: 8px 16px;
+	border-radius: 12px;
+	background: rgb(255 255 255 / 0.08);
+	font-size: 32px;
+}
+
+.buzzes li[data-status="answering"] {
+	background: #f59e0b;
+	color: #78350f;
+	font-weight: 700;
+}
+
+.buzzes li[data-status="correct"] {
+	background: #22c55e;
+	color: #052e16;
+}
+
+.buzzes li[data-status="wrong"] {
+	background: #ef4444;
+	color: #450a0a;
+}
+
+.buzzOrder {
+	font-weight: 700;
+	opacity: 0.6;
+}
+
+.buzzName {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.buzzMark {
+	font-size: 36px;
+	font-weight: 900;
+	text-align: center;
+}
+
+.previousText {
+	margin: 0 0 16px;
+	line-height: 1.4;
+	white-space: pre-wrap;
+}
+
+.previousAnswer {
+	font-size: 44px;
+	font-weight: 900;
+	color: #38bdf8;
+	margin: 0;
+	display: flex;
+	align-items: baseline;
+	gap: 16px;
+}
+
+.answerLabel {
+	font-size: 28px;
+	opacity: 0.7;
+}
+
+.scoreboard {
+	justify-content: flex-start;
+}
+
+.ranking {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	display: grid;
+	gap: 8px 16px;
+}
+
+.ranking li {
+	display: grid;
+	grid-template-columns: 50px 1fr auto auto;
+	align-items: center;
+	gap: 12px;
+	padding: 4px 12px;
+	border-radius: 12px;
+	background: rgb(255 255 255 / 0.05);
+}
+
+.ranking li[data-answering="true"] {
+	background: #f59e0b;
+	color: #78350f;
+	font-weight: 700;
+}
+
+.rank {
+	font-weight: 900;
+	opacity: 0.6;
+	text-align: center;
+}
+
+.rankName {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.statusTags {
+	display: flex;
+	gap: 6px;
+	font-size: 0.5em;
+}
+
+.clearedTag {
+	background: #15803d;
+	color: #fff;
+	padding: 2px 8px;
+	border-radius: 999px;
+	font-weight: 700;
+}
+
+.restTag {
+	background: #b91c1c;
+	color: #fff;
+	padding: 2px 8px;
+	border-radius: 999px;
+	font-weight: 700;
+}
+
+.rankScore {
+	font-weight: 900;
+	font-variant-numeric: tabular-nums;
+}
+
+.overlay {
+	position: fixed;
+	inset: 0;
+	background: rgb(11 17 32 / 0.92);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 24px;
+	z-index: 50;
+	animation: fadeIn 300ms ease;
+}
+
+@keyframes fadeIn {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+.overlayLabel {
+	font-size: 64px;
+	font-weight: 900;
+	letter-spacing: 0.2em;
+	color: #f59e0b;
+}
+
+.overlayName {
+	font-size: 120px;
+	font-weight: 900;
+}
+
+.overlayScore {
+	font-size: 72px;
+	opacity: 0.8;
+}

@@ -56,6 +56,15 @@ describe('共通コマンド', () => {
 		).toThrow('問題 ID');
 	});
 
+	it('next コマンドには乱数シードを埋める', () => {
+		const filled = fillCommandIds(
+			{type: 'next'},
+			() => 'id',
+			() => 9999,
+		);
+		expect(filled).toMatchObject({type: 'next', seed: 9999});
+	});
+
 	it('同じ名前では参加できない', () => {
 		const system: Actor = {role: 'system'};
 		const game = applyCommand(
