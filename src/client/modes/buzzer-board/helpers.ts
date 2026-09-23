@@ -58,8 +58,67 @@ export const questionNumber = (state: BuzzerBoardState) => {
 	return record ? state.history.indexOf(record) + 1 : null;
 };
 
+export interface ReviewStanding {
+	participant: Participant;
+	scoreBefore: number;
+	scoreDelta: number;
+	scoreAfter: number;
+	rank: number;
+	cleared: boolean;
+	rest: number;
+	streak: number;
+}
+
+/** 感想戦用: その問題が出題された時点の得点状況と増減を計算 */
+export const reviewStandings = (
+	game: BuzzerBoardGame,
+	record: QuestionRecord,
+): ReviewStanding[] => {
+	const deltas: Record<string, number> = {};
+	if (record.board) {
+		if (record.board.confirmedAt !== null) {
+			for (const [pId, ans] of Object.entries(record.board.answers)) {
+				if (ans.correct === true) {
+					deltas[pId] = 1;
+				}
+			}
+		}
+	} else if (record.result === 'correct') {
+		const correctBuzz = record.buzzes.find((b) => b.status === 'correct');
+		if (correctBuzz) {
+			const base = record.breakdown?.base ?? 1;
+			const bonus = record.breakdown?.bonus ?? 0;
+			deltas[correctBuzz.participantId] = base + bonus;
+		}
+	}
+
+	const sorted = game.participants
+		.map((participant) => {
+			const scoreBefore = record.scoresBefore[participant.id] ?? 0;
+			const scoreDelta = deltas[participant.id] ?? 0;
+			return {
+				participant,
+				scoreBefore,
+				scoreDelta,
+				scoreAfter: scoreBefore + scoreDelta,
+				cleared: Boolean(record.clearedBefore[participant.id]),
+				rest: record.restBefore[participant.id] ?? 0,
+				streak:
+					record.streakBefore?.participantId === participant.id ? record.streakBefore.count : 0,
+			};
+		})
+		.sort(
+			(a, b) => b.scoreBefore - a.scoreBefore || a.participant.joinedAt - b.participant.joinedAt,
+		);
+
+	return sorted.map((entry) => ({
+		...entry,
+		rank: sorted.findIndex((other) => other.scoreBefore === entry.scoreBefore) + 1,
+	}));
+};
+
 /** 得点表が縦に収まるよう、人数から行の高さと列数を決める */
-export const scoreboardLayout = (count: number, available = 860) => {
+export const scoreboardLayout = (count: number, available = 740) => {
 	const columns = count > 14 ? 2 : 1;
 	const rows = Math.max(1, Math.ceil(count / columns));
 	const rowHeight = Math.min(96, Math.floor(available / rows));

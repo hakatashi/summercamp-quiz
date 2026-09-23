@@ -2,6 +2,7 @@ import {
 	type BuzzerBoardState,
 	currentRecord,
 	describeResult,
+	GENRES,
 } from '../../../shared/modes/buzzer-board/index.ts';
 import type {ScreenProps} from '../types.ts';
 import {
@@ -23,9 +24,13 @@ export const MonitorView = ({view}: ScreenProps<BuzzerBoardState>) => {
 	const {state} = game;
 	const record = currentRecord(state);
 	const ranking = standings(game);
-	const layout = scoreboardLayout(ranking.length);
+	const layout = scoreboardLayout(ranking.length, 710);
 	const answering = record?.buzzes.find((b) => b.status === 'answering');
 	const buzzes = record?.buzzes.filter((b) => b.status !== 'void') ?? [];
+	const secondaryBuzzes = answering
+		? buzzes.filter((b) => b.participantId !== answering.participantId)
+		: buzzes;
+
 	const previous = previousRecord(state);
 	const previousQuestion = previous ? findQuestion(game, previous.questionId) : undefined;
 	const asked = state.history.filter((r) => r.result !== 'cancelled').length;
@@ -39,6 +44,12 @@ export const MonitorView = ({view}: ScreenProps<BuzzerBoardState>) => {
 	const submittedCount = clearedParticipants.filter(
 		(p) => boardAnswers[p.id]?.submittedAt !== null,
 	).length;
+
+	const chooserText = state.genreChooser
+		? `${participantName(game, state.genreChooser)} が選択中`
+		: state.nextGenre.chosenBy
+			? `${participantName(game, state.nextGenre.chosenBy)} が選択`
+			: '自動選択';
 
 	const headline = (() => {
 		switch (state.phase) {
@@ -57,8 +68,26 @@ export const MonitorView = ({view}: ScreenProps<BuzzerBoardState>) => {
 	return (
 		<div className={styles.stage}>
 			<header className={styles.header}>
-				<div className={styles.title}>{game.title}</div>
-				<div className={styles.headline}>{headline}</div>
+				<div className={styles.titleArea}>
+					<div className={styles.title}>{game.title}</div>
+				</div>
+				<div className={styles.headerCenter}>
+					<div className={styles.headline}>{headline}</div>
+					<div className={styles.genreInfo}>
+						{record?.genre ? (
+							<>
+								<span className={styles.genreBadge}>ジャンル: {record.genre}</span>
+								<span className={styles.nextGenreSub}>
+									(次: {state.nextGenre.genre} ・ {chooserText})
+								</span>
+							</>
+						) : (
+							<span className={styles.nextGenreBadge}>
+								次のジャンル: {state.nextGenre.genre} ({chooserText})
+							</span>
+						)}
+					</div>
+				</div>
 				<div className={styles.progress}>
 					出題 {asked} / {questionCount} 問
 				</div>
@@ -71,10 +100,13 @@ export const MonitorView = ({view}: ScreenProps<BuzzerBoardState>) => {
 							<div className={styles.panelLabel}>
 								{record?.board?.confirmedAt !== null ? 'ボードクイズ結果' : 'ボードクイズ'}
 							</div>
-							{record?.genre && <div className={styles.genreBadge}>{record.genre}</div>}
+							{record?.genre && <div className={styles.panelGenreBadge}>{record.genre}</div>}
 							<div className={styles.boardPanelContent}>
 								{record?.board?.confirmedAt !== null ? (
-									<ul className={styles.boardConfirmedList}>
+									<ul
+										className={styles.boardConfirmedList}
+										data-compact={clearedParticipants.length > 8}
+									>
 										{clearedParticipants.map((p) => {
 											const ans = boardAnswers[p.id];
 											const text =
@@ -106,7 +138,10 @@ export const MonitorView = ({view}: ScreenProps<BuzzerBoardState>) => {
 										<div className={styles.boardMonitorSub}>
 											回答済み: {submittedCount} / {clearedParticipants.length} 人
 										</div>
-										<ul className={styles.boardMonitorList}>
+										<ul
+											className={styles.boardMonitorList}
+											data-compact={clearedParticipants.length > 12}
+										>
 											{clearedParticipants.map((p) => {
 												const hasSubmitted = boardAnswers[p.id]?.submittedAt !== null;
 												return (
@@ -126,32 +161,54 @@ export const MonitorView = ({view}: ScreenProps<BuzzerBoardState>) => {
 					) : (
 						<section className={styles.panel} data-highlight={Boolean(answering)}>
 							<div className={styles.panelLabel}>回答権</div>
-							{record?.genre && <div className={styles.genreBadge}>{record.genre}</div>}
+							{record?.genre && <div className={styles.panelGenreBadge}>{record.genre}</div>}
 							{answering ? (
-								<div className={styles.answeringName}>
-									{participantName(game, answering.participantId)}
+								<div className={styles.answeringSection}>
+									<div className={styles.answeringName}>
+										{participantName(game, answering.participantId)}
+									</div>
+									{secondaryBuzzes.length > 0 && (
+										<div className={styles.secondarySection}>
+											<span className={styles.secondaryLabel}>着順:</span>
+											<ol className={styles.secondaryBuzzes}>
+												{secondaryBuzzes.map((buzz, index) => (
+													<li key={buzz.participantId} data-status={buzz.status}>
+														<span className={styles.secondaryOrder}>{index + 2}</span>
+														<span className={styles.secondaryName}>
+															{participantName(game, buzz.participantId)}
+														</span>
+														{markOf[buzz.status] && (
+															<span className={styles.secondaryMark}>{markOf[buzz.status]}</span>
+														)}
+													</li>
+												))}
+											</ol>
+										</div>
+									)}
 								</div>
 							) : (
-								<div className={styles.placeholder}>
-									{state.phase === 'reading'
-										? '問題読み上げ中'
-										: record?.result
-											? describeResult(record.result)
-											: '—'}
+								<div className={styles.placeholderSection}>
+									<div className={styles.placeholder}>
+										{state.phase === 'reading'
+											? '問題読み上げ中'
+											: record?.result
+												? describeResult(record.result)
+												: '—'}
+									</div>
+									{secondaryBuzzes.length > 0 && (
+										<ol className={styles.buzzes}>
+											{secondaryBuzzes.map((buzz, index) => (
+												<li key={buzz.participantId} data-status={buzz.status}>
+													<span className={styles.buzzOrder}>{index + 1}</span>
+													<span className={styles.buzzName}>
+														{participantName(game, buzz.participantId)}
+													</span>
+													<span className={styles.buzzMark}>{markOf[buzz.status]}</span>
+												</li>
+											))}
+										</ol>
+									)}
 								</div>
-							)}
-							{buzzes.length > 0 && (
-								<ol className={styles.buzzes}>
-									{buzzes.map((buzz, index) => (
-										<li key={buzz.participantId} data-status={buzz.status}>
-											<span className={styles.buzzOrder}>{index + 1}</span>
-											<span className={styles.buzzName}>
-												{participantName(game, buzz.participantId)}
-											</span>
-											<span className={styles.buzzMark}>{markOf[buzz.status]}</span>
-										</li>
-									))}
-								</ol>
 							)}
 						</section>
 					)}
@@ -186,15 +243,26 @@ export const MonitorView = ({view}: ScreenProps<BuzzerBoardState>) => {
 						style={{
 							gridTemplateColumns: `repeat(${layout.columns}, 1fr)`,
 							gridTemplateRows: `repeat(${layout.rows}, ${layout.rowHeight}px)`,
-							fontSize: Math.round(layout.rowHeight * 0.45),
+							fontSize: Math.round(layout.rowHeight * 0.44),
 						}}
 					>
-						{ranking.map(({participant, score, rank, rest, cleared}) => (
-							<li key={participant.id} data-answering={answering?.participantId === participant.id}>
+						{ranking.map(({participant, score, rank, rest, cleared, streak}) => (
+							<li
+								key={participant.id}
+								data-answering={answering?.participantId === participant.id}
+								style={{
+									padding: layout.rowHeight < 45 ? '2px 8px' : '4px 12px',
+								}}
+							>
 								<span className={styles.rank}>{rank}</span>
 								<span className={styles.rankName}>{participant.name}</span>
 								<span className={styles.statusTags}>
 									{cleared && <span className={styles.clearedTag}>勝抜</span>}
+									{streak > 0 && (
+										<span className={styles.streakTag}>
+											{streak > 1 ? `${streak}連答` : '連答中'}
+										</span>
+									)}
 									{rest > 0 && <span className={styles.restTag}>休{rest}</span>}
 								</span>
 								<span className={styles.rankScore}>{score}</span>
@@ -203,6 +271,24 @@ export const MonitorView = ({view}: ScreenProps<BuzzerBoardState>) => {
 					</ol>
 				</section>
 			</main>
+
+			<footer className={styles.genresFooter}>
+				{GENRES.map((genre) => {
+					const count = state.unaskedCounts?.[genre] ?? 0;
+					const isCurrent = record ? record.genre === genre : state.nextGenre.genre === genre;
+					return (
+						<div
+							key={genre}
+							className={styles.genreCard}
+							data-empty={count === 0}
+							data-current={isCurrent}
+						>
+							<span className={styles.genreName}>{genre}</span>
+							<span className={styles.genreCount}>{count}</span>
+						</div>
+					);
+				})}
+			</footer>
 
 			{state.phase === 'finished' && winners.length > 0 && (
 				<div className={styles.overlay}>

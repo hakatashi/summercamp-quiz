@@ -6,6 +6,7 @@ import {
 	normalizeAnswer,
 	participantName,
 	questionFontSize,
+	reviewStandings,
 	scoreboardLayout,
 	standings,
 } from './helpers.ts';
@@ -21,12 +22,17 @@ describe('buzzer-board client helpers', () => {
 		const layout10 = scoreboardLayout(10);
 		expect(layout10.columns).toBe(1);
 		expect(layout10.rows).toBe(10);
-		expect(layout10.rowHeight).toBe(86);
+		expect(layout10.rowHeight).toBe(74);
 
 		const layout20 = scoreboardLayout(20);
 		expect(layout20.columns).toBe(2);
 		expect(layout20.rows).toBe(10);
-		expect(layout20.rowHeight).toBe(86);
+		expect(layout20.rowHeight).toBe(74);
+
+		const layout40 = scoreboardLayout(40);
+		expect(layout40.columns).toBe(2);
+		expect(layout40.rows).toBe(20);
+		expect(layout40.rowHeight).toBe(37);
 	});
 
 	it('questionFontSize は問題文の長さに応じて文字サイズを返す', () => {
@@ -149,5 +155,107 @@ describe('buzzer-board client helpers', () => {
 		expect(normalizeAnswer('ｱｲｳｴｵ')).toBe('アイウエオ');
 		expect(normalizeAnswer('アイウエオ')).toBe('アイウエオ');
 		expect(normalizeAnswer(' １２３ ')).toBe('123');
+	});
+
+	it('reviewStandings は早押しの出題時得点と正解点・連答ボーナスを正しく計算する', () => {
+		const participants: Participant[] = [
+			createParticipant('p1', 'Alice', 100),
+			createParticipant('p2', 'Bob', 200),
+		];
+		const game: Game<BuzzerBoardState> = {
+			id: 'g1',
+			mode: 'buzzer-board',
+			title: 'テスト',
+			createdAt: 0,
+			participants,
+			questions: [],
+			state: {} as BuzzerBoardState,
+			review: null,
+		};
+		const record = {
+			questionId: 'q1',
+			startedAt: 1000,
+			endedAt: 2000,
+			genre: 'ノンジャンル' as const,
+			scoresBefore: {p1: 2, p2: 1},
+			restBefore: {p2: 1},
+			clearedBefore: {},
+			streakBefore: {participantId: 'p1', count: 1},
+			nextGenreBefore: {genre: 'ノンジャンル' as const, chosenBy: null},
+			genreChooserBefore: null,
+			buzzes: [
+				{participantId: 'p1', pressedAt: 1200, receivedAt: 1205, status: 'correct' as const},
+			],
+			result: 'correct' as const,
+			breakdown: {base: 1, bonus: 1},
+			board: null,
+		};
+
+		const standings = reviewStandings(game, record);
+		expect(standings).toHaveLength(2);
+		expect(standings[0]?.participant.id).toBe('p1');
+		expect(standings[0]?.scoreBefore).toBe(2);
+		expect(standings[0]?.scoreDelta).toBe(2); // base 1 + bonus 1
+		expect(standings[0]?.scoreAfter).toBe(4);
+		expect(standings[0]?.streak).toBe(1);
+
+		expect(standings[1]?.participant.id).toBe('p2');
+		expect(standings[1]?.scoreBefore).toBe(1);
+		expect(standings[1]?.scoreDelta).toBe(0);
+		expect(standings[1]?.scoreAfter).toBe(1);
+		expect(standings[1]?.rest).toBe(1);
+	});
+
+	it('reviewStandings はボードクイズの正解・不正解の得点変動を正しく計算する', () => {
+		const participants: Participant[] = [
+			createParticipant('p1', 'Alice', 100),
+			createParticipant('p2', 'Bob', 200),
+		];
+		const game: Game<BuzzerBoardState> = {
+			id: 'g1',
+			mode: 'buzzer-board',
+			title: 'テスト',
+			createdAt: 0,
+			participants,
+			questions: [],
+			state: {} as BuzzerBoardState,
+			review: null,
+		};
+		const record = {
+			questionId: 'q2',
+			startedAt: 1000,
+			endedAt: 2000,
+			genre: 'スポーツ' as const,
+			scoresBefore: {p1: 5, p2: 5},
+			restBefore: {},
+			clearedBefore: {p1: true, p2: true},
+			streakBefore: null,
+			nextGenreBefore: {genre: 'スポーツ' as const, chosenBy: null},
+			genreChooserBefore: null,
+			buzzes: [],
+			result: 'correct' as const,
+			breakdown: null,
+			board: {
+				answers: {
+					p1: {participantId: 'p1', text: '解答1', submittedAt: 1100, correct: true},
+					p2: {participantId: 'p2', text: '解答2', submittedAt: 1200, correct: false},
+				},
+				closedAt: 1500,
+				confirmedAt: 1800,
+			},
+		};
+
+		const standings = reviewStandings(game, record);
+		expect(standings).toHaveLength(2);
+		const p1Standing = standings.find((s) => s.participant.id === 'p1');
+		const p2Standing = standings.find((s) => s.participant.id === 'p2');
+
+		expect(p1Standing?.scoreDelta).toBe(1);
+		expect(p1Standing?.scoreAfter).toBe(6);
+		expect(p1Standing?.cleared).toBe(true);
+
+		expect(p2Standing?.scoreDelta).toBe(0);
+		expect(p2Standing?.scoreAfter).toBe(5);
+		expect(p2Standing?.cleared).toBe(true);
 	});
 });
