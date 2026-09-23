@@ -1,6 +1,7 @@
 import {mkdirSync} from 'node:fs';
 import {dirname} from 'node:path';
 import {DatabaseSync} from 'node:sqlite';
+import type {MediaMetadata} from '../shared/media.ts';
 import type {Actor, Game, ModeId} from '../shared/types.ts';
 
 export interface GameRow {
@@ -54,6 +55,13 @@ export class Database {
 				token TEXT PRIMARY KEY,
 				game_id TEXT NOT NULL,
 				participant_id TEXT NOT NULL
+			);
+			CREATE TABLE IF NOT EXISTS media (
+				id TEXT PRIMARY KEY,
+				mime_type TEXT NOT NULL,
+				size INTEGER NOT NULL,
+				original_name TEXT NOT NULL,
+				created_at INTEGER NOT NULL
 			);
 		`);
 	}
@@ -153,5 +161,28 @@ export class Database {
 			.prepare('SELECT game_id, participant_id FROM participant_tokens WHERE token = ?')
 			.get(token);
 		return row ? {gameId: String(row.game_id), participantId: String(row.participant_id)} : null;
+	}
+
+	insertMedia(media: MediaMetadata) {
+		this.#db
+			.prepare(
+				'INSERT INTO media (id, mime_type, size, original_name, created_at) VALUES (?, ?, ?, ?, ?)',
+			)
+			.run(media.id, media.mimeType, media.size, media.originalName, media.createdAt);
+	}
+
+	findMedia(id: string): MediaMetadata | null {
+		const row = this.#db
+			.prepare('SELECT id, mime_type, size, original_name, created_at FROM media WHERE id = ?')
+			.get(id);
+		return row
+			? {
+					id: String(row.id),
+					mimeType: String(row.mime_type),
+					size: Number(row.size),
+					originalName: String(row.original_name),
+					createdAt: Number(row.created_at),
+				}
+			: null;
 	}
 }

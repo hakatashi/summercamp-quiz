@@ -5,6 +5,7 @@ import {projectGame} from '../shared/engine.ts';
 import {isModeId} from '../shared/modes/registry.ts';
 import type {Ack, ClientToServerEvents, ServerToClientEvents} from '../shared/protocol.ts';
 import {type Actor, CommandError, type GameView, type Viewer} from '../shared/types.ts';
+import {isHostPasswordValid} from './auth.ts';
 import type {GameManager} from './gameManager.ts';
 
 interface SocketData {
@@ -57,7 +58,7 @@ export const attachSocketServer = (
 	});
 
 	const isHost = (password: string | undefined) =>
-		options.hostPassword === '' || password === options.hostPassword;
+		isHostPasswordValid(options.hostPassword, password);
 
 	/** gameId → participantId → 接続数 */
 	const online = new Map<string, Map<string, number>>();

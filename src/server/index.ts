@@ -9,6 +9,7 @@ const dataDir = resolve(process.env.DATA_DIR ?? 'data');
 
 const app = createApp({
 	dbPath: resolve(dataDir, 'quiz.sqlite'),
+	mediaDir: resolve(dataDir, 'media'),
 	hostPassword: process.env.HOST_PASSWORD ?? '',
 	clientDir: production ? resolve('dist/client') : undefined,
 });
