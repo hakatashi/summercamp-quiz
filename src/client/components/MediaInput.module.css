@@ -1,0 +1,66 @@
+.container {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.label {
+	font-weight: 700;
+	font-size: 0.95rem;
+}
+
+.preview {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 10px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius);
+	background: #f8fafc;
+	align-items: flex-start;
+}
+
+.image {
+	max-width: 100%;
+	max-height: 240px;
+	object-fit: contain;
+	border-radius: 6px;
+	border: 1px solid var(--color-border);
+	background: #ffffff;
+}
+
+.audio {
+	width: 100%;
+	max-width: 480px;
+}
+
+.actions {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+}
+
+.uploadProgress {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin-top: 4px;
+}
+
+.progressBar {
+	flex: 1;
+	max-width: 240px;
+	height: 12px;
+	border-radius: 6px;
+}
+
+.progressText {
+	font-size: 0.85rem;
+	color: var(--color-muted);
+}
+
+.error {
+	margin: 0;
+	color: var(--color-wrong);
+	font-size: 0.85rem;
+}
