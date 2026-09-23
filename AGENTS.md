@@ -27,6 +27,16 @@ npm run lint       # Biome (npm run format で整形)
 npm test           # Vitest
 ```
 
+## 画面確認・スクリーンショット
+
+ヘッドレス Chrome による画面検証やスクリーンショット撮影を行う際は、コンテナ環境でのスタック防止と安定性のため以下を守る。
+
+- 実行コマンドには必ず `timeout <秒数>` を付与する (例: `timeout 10 ...`)
+- Chrome 起動オプション: `--headless --no-sandbox --disable-gpu --disable-dev-shm-usage`
+  - `--headless=new` はバックグラウンド処理待機で終了しなくなる場合があるため、旧モード (`--headless`) を使う
+- 推奨アプローチ: サーバー起動や Socket 待機を伴う E2E よりも、`renderToStaticMarkup` で静的 HTML を出力し `file://` 経由で撮影する方が高速 (0.1秒台) かつ決定論的に検証できる
+- モニター画面の比率維持: `--window-size` 指定時でも内部 viewport が小さくなる場合があるため、`MonitorStage` と同様に `Math.min(window.innerWidth / 1920, window.innerHeight / 1080)` で動的スケールして枠内に収める
+
 ## 約束ごと
 
 - TypeScript は Node 24 で直接実行する。enum など型を消すだけでは動かない構文は使わない。相対 import には `.ts` / `.tsx` 拡張子を付ける
@@ -34,3 +44,4 @@ npm test           # Vitest
 - ルールを変えたら `src/shared` のテストを足す
 - コミットの前に typecheck・lint・test を通す。コミットは作業の区切りごとに行う
 - UI の文言、コメント、ドキュメントは日本語で書く
+- コマンド実行時はスタック防止のため `timeout` を活用する
