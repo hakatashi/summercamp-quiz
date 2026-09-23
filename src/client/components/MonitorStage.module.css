@@ -1,0 +1,16 @@
+.viewport {
+	position: fixed;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	overflow: hidden;
+	background: #000;
+}
+
+.stage {
+	flex: none;
+	position: relative;
+	overflow: hidden;
+	transform-origin: center center;
+}

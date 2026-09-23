@@ -1,0 +1,29 @@
+.container {
+	position: fixed;
+	left: 50%;
+	bottom: 16px;
+	transform: translateX(-50%);
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	z-index: 1000;
+	pointer-events: none;
+	width: min(90vw, 480px);
+}
+
+.info,
+.error {
+	padding: 10px 16px;
+	border-radius: var(--radius);
+	color: #fff;
+	box-shadow: 0 4px 16px rgb(0 0 0 / 0.2);
+	font-size: 0.95rem;
+}
+
+.info {
+	background: #1f2937;
+}
+
+.error {
+	background: var(--color-wrong);
+}

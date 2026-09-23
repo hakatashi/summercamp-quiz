@@ -1,0 +1,79 @@
+:root {
+	--color-bg: #f4f6fb;
+	--color-surface: #ffffff;
+	--color-text: #1d2433;
+	--color-muted: #667085;
+	--color-border: #d0d5dd;
+	--color-primary: #2563eb;
+	--color-primary-dark: #1d4ed8;
+	--color-correct: #16a34a;
+	--color-wrong: #dc2626;
+	--color-warning: #d97706;
+	--radius: 10px;
+	font-family:
+		"Noto Sans JP", "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic UI", Meiryo, system-ui,
+		sans-serif;
+	color: var(--color-text);
+	background: var(--color-bg);
+	line-height: 1.6;
+	-webkit-text-size-adjust: 100%;
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	min-height: 100dvh;
+}
+
+a {
+	color: var(--color-primary);
+}
+
+button,
+input,
+textarea,
+select {
+	font: inherit;
+	color: inherit;
+}
+
+button {
+	cursor: pointer;
+	border: 1px solid var(--color-border);
+	background: var(--color-surface);
+	border-radius: 8px;
+	padding: 0.4em 0.9em;
+}
+
+button:where(:hover:not(:disabled)) {
+	background: #eef2ff;
+}
+
+button:disabled {
+	cursor: not-allowed;
+	opacity: 0.5;
+}
+
+input,
+textarea,
+select {
+	border: 1px solid var(--color-border);
+	border-radius: 8px;
+	padding: 0.4em 0.6em;
+	background: var(--color-surface);
+}
+
+textarea {
+	resize: vertical;
+}
+
+h1,
+h2,
+h3 {
+	line-height: 1.3;
+}

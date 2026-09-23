@@ -1,0 +1,133 @@
+.container {
+	display: flex;
+	flex-direction: column;
+	min-height: 100dvh;
+	padding: max(12px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+	gap: 12px;
+	background: #101828;
+	color: #fff;
+	/* スクロールやピンチでの誤操作を防ぐ */
+	overscroll-behavior: none;
+	user-select: none;
+	-webkit-user-select: none;
+}
+
+.header {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: 12px;
+}
+
+.name {
+	font-size: 1.3rem;
+	font-weight: 700;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.score {
+	display: flex;
+	align-items: baseline;
+	gap: 4px;
+	flex: none;
+}
+
+.scoreValue {
+	font-size: 2.4rem;
+	font-weight: 800;
+	font-variant-numeric: tabular-nums;
+}
+
+.scoreUnit {
+	font-size: 1rem;
+	opacity: 0.7;
+}
+
+.rank {
+	margin-left: 8px;
+	font-size: 1rem;
+	opacity: 0.8;
+}
+
+.status {
+	padding: 10px;
+	border-radius: var(--radius);
+	text-align: center;
+	font-size: 1.25rem;
+	font-weight: 700;
+	background: #1f2a44;
+}
+
+.status[data-tone="answering"] {
+	background: #d97706;
+	animation: pulse 1s ease-in-out infinite alternate;
+}
+
+.status[data-tone="waiting"] {
+	background: #2563eb;
+}
+
+.status[data-tone="wrong"] {
+	background: #7f1d1d;
+}
+
+.status[data-tone="correct"] {
+	background: #15803d;
+}
+
+@keyframes pulse {
+	from {
+		filter: brightness(1);
+	}
+	to {
+		filter: brightness(1.25);
+	}
+}
+
+.buttonArea {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 16px;
+	/* 画面の端を触って誤って押さないよう、余白を取る */
+	padding: 16px 0;
+}
+
+.hint {
+	margin: 0;
+	font-size: 0.8rem;
+	opacity: 0.5;
+}
+
+@media (pointer: coarse) {
+	.hint {
+		display: none;
+	}
+}
+
+.previous {
+	padding: 12px;
+	border-radius: var(--radius);
+	background: #1f2a44;
+	user-select: text;
+	-webkit-user-select: text;
+}
+
+.previousLabel {
+	font-size: 0.8rem;
+	opacity: 0.7;
+}
+
+.previousText {
+	font-size: 0.95rem;
+}
+
+.previousAnswer {
+	margin-top: 4px;
+	font-weight: 700;
+	color: #fcd34d;
+}

@@ -1,0 +1,45 @@
+.button {
+	/* 誤タップしにくく、押しやすい大きさ。画面の短い辺に合わせる */
+	width: min(72vw, 46dvh, 340px);
+	aspect-ratio: 1;
+	border-radius: 50%;
+	border: 10px solid #7f1d1d;
+	background: radial-gradient(circle at 35% 30%, #f87171, #dc2626 55%, #991b1b);
+	box-shadow:
+		0 12px 0 #7f1d1d,
+		0 18px 30px rgb(0 0 0 / 0.35);
+	color: #fff;
+	touch-action: manipulation;
+	user-select: none;
+	-webkit-user-select: none;
+	-webkit-touch-callout: none;
+	-webkit-tap-highlight-color: transparent;
+	transition:
+		transform 60ms,
+		box-shadow 60ms,
+		filter 150ms;
+	padding: 0;
+}
+
+.button:hover:not(:disabled) {
+	background: radial-gradient(circle at 35% 30%, #f87171, #dc2626 55%, #991b1b);
+}
+
+.button:active[data-enabled="true"] {
+	transform: translateY(10px);
+	box-shadow:
+		0 2px 0 #7f1d1d,
+		0 6px 12px rgb(0 0 0 / 0.35);
+}
+
+.button[data-enabled="false"] {
+	filter: grayscale(1) brightness(0.8);
+	cursor: default;
+}
+
+.label {
+	font-size: clamp(1.6rem, 8vw, 2.6rem);
+	font-weight: 800;
+	letter-spacing: 0.1em;
+	text-shadow: 0 2px 4px rgb(0 0 0 / 0.4);
+}

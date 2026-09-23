@@ -1,0 +1,28 @@
+.container {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 100dvh;
+	padding: 16px;
+}
+
+.form {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	width: min(100%, 360px);
+	padding: 24px;
+	background: var(--color-surface);
+	border-radius: var(--radius);
+	box-shadow: 0 4px 16px rgb(0 0 0 / 0.08);
+}
+
+.form h1 {
+	margin: 0;
+	font-size: 1.3rem;
+}
+
+.error {
+	margin: 0;
+	color: var(--color-wrong);
+}

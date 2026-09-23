@@ -81,12 +81,12 @@ export class Database {
 			)
 			.all();
 		return rows.map((row) => ({
-			id: String(row['id']),
-			mode: String(row['mode']) as ModeId,
-			title: String(row['title']),
-			createdAt: Number(row['created_at']),
-			snapshot: JSON.parse(String(row['snapshot'])) as Game,
-			version: Number(row['version']),
+			id: String(row.id),
+			mode: String(row.mode) as ModeId,
+			title: String(row.title),
+			createdAt: Number(row.created_at),
+			snapshot: JSON.parse(String(row.snapshot)) as Game,
+			version: Number(row.version),
 		}));
 	}
 
@@ -112,7 +112,7 @@ export class Database {
 		const row = this.#db
 			.prepare('SELECT COALESCE(MAX(seq), 0) AS seq FROM events WHERE game_id = ?')
 			.get(gameId);
-		const seq = Number(row?.['seq'] ?? 0) + 1;
+		const seq = Number(row?.seq ?? 0) + 1;
 		this.#db
 			.prepare('INSERT INTO events (game_id, seq, command, actor, at) VALUES (?, ?, ?, ?, ?)')
 			.run(gameId, seq, JSON.stringify(event.command), JSON.stringify(event.actor), event.at);
@@ -124,11 +124,11 @@ export class Database {
 			.prepare('SELECT seq, command, actor, at, undone FROM events WHERE game_id = ? ORDER BY seq')
 			.all(gameId)
 			.map((row) => ({
-				seq: Number(row['seq']),
-				command: JSON.parse(String(row['command'])),
-				actor: JSON.parse(String(row['actor'])),
-				at: Number(row['at']),
-				undone: Number(row['undone']) === 1,
+				seq: Number(row.seq),
+				command: JSON.parse(String(row.command)),
+				actor: JSON.parse(String(row.actor)),
+				at: Number(row.at),
+				undone: Number(row.undone) === 1,
 			}));
 	}
 
@@ -146,8 +146,6 @@ export class Database {
 		const row = this.#db
 			.prepare('SELECT game_id, participant_id FROM participant_tokens WHERE token = ?')
 			.get(token);
-		return row
-			? {gameId: String(row['game_id']), participantId: String(row['participant_id'])}
-			: null;
+		return row ? {gameId: String(row.game_id), participantId: String(row.participant_id)} : null;
 	}
 }

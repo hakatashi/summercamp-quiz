@@ -2,13 +2,13 @@ import {networkInterfaces} from 'node:os';
 import {resolve} from 'node:path';
 import {createApp} from './app.ts';
 
-const production = process.env['NODE_ENV'] === 'production';
-const port = Number(process.env['PORT'] ?? 3000);
-const dataDir = resolve(process.env['DATA_DIR'] ?? 'data');
+const production = process.env.NODE_ENV === 'production';
+const port = Number(process.env.PORT ?? 3000);
+const dataDir = resolve(process.env.DATA_DIR ?? 'data');
 
 const app = createApp({
 	dbPath: resolve(dataDir, 'quiz.sqlite'),
-	hostPassword: process.env['HOST_PASSWORD'] ?? '',
+	hostPassword: process.env.HOST_PASSWORD ?? '',
 	clientDir: production ? resolve('dist/client') : undefined,
 });
 
@@ -26,7 +26,7 @@ console.log('LAN 内からは次の URL でアクセスできます:');
 for (const address of addresses) {
 	console.log(`  ${address}`);
 }
-if (!process.env['HOST_PASSWORD']) {
+if (!process.env.HOST_PASSWORD) {
 	console.log('注意: HOST_PASSWORD が未設定なので、誰でも司会者画面を開けます');
 }
 

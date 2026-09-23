@@ -71,7 +71,7 @@ describe('simple-buzzer', () => {
 		buzz('a');
 		expect(state().phase).toBe('answering');
 		run({type: 'judge', correct: true});
-		expect(state().scores['a']).toBe(1);
+		expect(state().scores.a).toBe(1);
 		expect(state().phase).toBe('closed');
 		expect(current()?.result).toBe('correct');
 	});
@@ -85,7 +85,7 @@ describe('simple-buzzer', () => {
 			['b', 'waiting'],
 		]);
 		run({type: 'judge', correct: false});
-		expect(state().scores['a']).toBe(-1);
+		expect(state().scores.a).toBe(-1);
 		expect(state().phase).toBe('answering');
 		expect(statuses()).toEqual([
 			['a', 'wrong'],
@@ -187,10 +187,10 @@ describe('simple-buzzer', () => {
 		buzz('a');
 		run({type: 'judge', correct: true});
 		run({type: 'cancel', returnToPool: false});
-		expect(state().scores['a']).toBe(0);
+		expect(state().scores.a).toBe(0);
 		expect(() => run({type: 'cancel', returnToPool: false})).toThrow('既に取り消されています');
 		run({type: 'cancel', returnToPool: true});
-		expect(state().scores['a']).toBe(0);
+		expect(state().scores.a).toBe(0);
 	});
 
 	it('押下のリセットで判定前の押下だけが消える', () => {
@@ -208,7 +208,7 @@ describe('simple-buzzer', () => {
 
 	it('得点を直接変更できる', () => {
 		run({type: 'setScore', participantId: 'b', score: 7});
-		expect(state().scores['b']).toBe(7);
+		expect(state().scores.b).toBe(7);
 	});
 
 	it('参加者は司会者の操作をできない', () => {
