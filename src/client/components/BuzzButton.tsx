@@ -1,5 +1,6 @@
 import {useEffect, useRef} from 'react';
-import {eventEpoch, toServerTime} from '../lib/clock.ts';
+import type {BuzzDiag} from '../../shared/buzz.ts';
+import {clockStatus, eventEpoch, toServerTime} from '../lib/clock.ts';
 import styles from './BuzzButton.module.css';
 
 interface Props {
@@ -9,7 +10,7 @@ interface Props {
 	armKey: string;
 	label: string;
 	/** 押した時刻 (サーバー時刻) を受け取る。失敗したら reject すると、もう一度押せるようになる */
-	onPress: (pressedAt: number) => Promise<void>;
+	onPress: (pressedAt: number, diag?: BuzzDiag) => Promise<void>;
 }
 
 const isTypingTarget = (target: EventTarget | null) =>
@@ -40,8 +41,10 @@ export const BuzzButton = ({enabled, armKey, label, onPress}: Props) => {
 			if (!enabled || pressedRef.current) return;
 			pressedRef.current = true;
 			const pressedAt = toServerTime(eventEpoch(event));
+			const status = clockStatus();
+			const diag = status.rtt !== null ? {rtt: status.rtt, offset: status.offset} : undefined;
 			navigator.vibrate?.(40);
-			onPress(pressedAt).catch(() => {
+			onPress(pressedAt, diag).catch(() => {
 				pressedRef.current = false;
 			});
 		};
