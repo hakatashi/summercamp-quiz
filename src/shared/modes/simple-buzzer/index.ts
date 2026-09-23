@@ -334,4 +334,7 @@ export const simpleBuzzer: ModeDefinition<SimpleBuzzerState, SimpleBuzzerCommand
 				return `${name(command.participantId)} の得点を ${command.score} に変更`;
 		}
 	},
+	askedQuestionIds(game) {
+		return askedQuestionIds(game.state);
+	},
 };

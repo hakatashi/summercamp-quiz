@@ -32,6 +32,8 @@ export interface ModeDefinition<S = unknown, C extends ModeCommand = ModeCommand
 	project(game: Game<S>, viewer: Viewer): Game<S>;
 	/** 取り消し (undo) のときに表示するコマンドの説明 */
 	describe(command: C, game: Game<S>): string;
+	/** 出題済みの問題 ID の集合を返す (省略可) */
+	askedQuestionIds?(game: Game<S>): Set<string>;
 }
 
 /** 型パラメータを消した ModeDefinition (registry で扱うため) */

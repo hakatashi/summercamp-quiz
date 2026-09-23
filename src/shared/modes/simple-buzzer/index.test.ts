@@ -1,7 +1,7 @@
 import {beforeEach, describe, expect, it} from 'vitest';
 import {applyCommand, createGame, projectGame} from '../../engine.ts';
 import type {Actor, Game} from '../../types.ts';
-import {BUZZ_GRACE_MS, type SimpleBuzzerState} from './index.ts';
+import {BUZZ_GRACE_MS, type SimpleBuzzerState, simpleBuzzer} from './index.ts';
 
 const host: Actor = {role: 'host'};
 const system: Actor = {role: 'system'};
@@ -230,5 +230,16 @@ describe('simple-buzzer', () => {
 		run({type: 'close'});
 		const visible = projectGame(game, {role: 'participant', participantId: 'a'}).questions;
 		expect(visible.map((q) => q.id)).toEqual(['q1']);
+	});
+
+	it('askedQuestionIds が出題済みの問題 ID を正しく返す', () => {
+		expect(simpleBuzzer.askedQuestionIds?.(game)).toEqual(new Set());
+		run({type: 'next'});
+		expect(simpleBuzzer.askedQuestionIds?.(game)).toEqual(new Set(['q1']));
+		run({type: 'close'});
+		run({type: 'next'});
+		expect(simpleBuzzer.askedQuestionIds?.(game)).toEqual(new Set(['q1', 'q2']));
+		run({type: 'cancel', returnToPool: true});
+		expect(simpleBuzzer.askedQuestionIds?.(game)).toEqual(new Set(['q1']));
 	});
 });
