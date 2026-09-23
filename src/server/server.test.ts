@@ -196,4 +196,61 @@ describe('サーバー', () => {
 			await call(alice.socket, 'command', {type: 'buzz', pressedAt: Date.now()}),
 		).toMatchObject({ok: false});
 	});
+
+	it('感想戦コマンドが全画面に同期され、undo の対象外である', async () => {
+		const {host, gameId} = await setupGame();
+		const monitor = await client();
+		await call(monitor, 'subscribe', {gameId, role: 'monitor'});
+		const alice = await joinAs(gameId, 'Alice');
+
+		// 1問目出題 & 正解
+		await call(host, 'command', {type: 'next'});
+		await call(alice.socket, 'command', {type: 'buzz', pressedAt: Date.now()});
+		await call(host, 'command', {type: 'judge', correct: true});
+
+		// 2問目出題 & スルー
+		await call(host, 'command', {type: 'next'});
+		await call(host, 'command', {type: 'close'});
+
+		// 直近の undoable 操作はスルー (問題終了)
+		expect(app.manager.describeUndoable(gameId)).toBe('スルー (問題終了)');
+
+		// 感想戦を開始
+		const hostReview0 = waitForView(host, (v) => v.game.review?.index === 0);
+		const monitorReview0 = waitForView(monitor, (v) => v.game.review?.index === 0);
+		const aliceReview0 = waitForView(alice.socket, (v) => v.game.review?.index === 0);
+
+		expect(await call(host, 'command', {type: 'review.start'})).toEqual({ok: true});
+
+		const [hostV0, monitorV0, aliceV0] = await Promise.all([
+			hostReview0,
+			monitorReview0,
+			aliceReview0,
+		]);
+		expect(hostV0.game.review).toEqual({index: 0});
+		expect(monitorV0.game.review).toEqual({index: 0});
+		expect(aliceV0.game.review).toEqual({index: 0});
+		// 感想戦中は参加者にも出題済みの問題が見える
+		expect(aliceV0.game.questions.map((q) => q.answer)).toEqual(['答え1', '答え2']);
+
+		// 感想戦コマンドは undoable にならない
+		expect(app.manager.describeUndoable(gameId)).toBe('スルー (問題終了)');
+
+		// 次へ移動
+		const monitorReview1 = waitForView(monitor, (v) => v.game.review?.index === 1);
+		expect(await call(host, 'command', {type: 'review.move', index: 1})).toEqual({ok: true});
+		const monitorV1 = await monitorReview1;
+		expect(monitorV1.game.review).toEqual({index: 1});
+
+		// 感想戦を終了
+		const monitorReviewEnd = waitForView(monitor, (v) => v.game.review === null);
+		const aliceReviewEnd = waitForView(alice.socket, (v) => v.game.review === null);
+		expect(await call(host, 'command', {type: 'review.end'})).toEqual({ok: true});
+
+		const [monitorVEnd, aliceVEnd] = await Promise.all([monitorReviewEnd, aliceReviewEnd]);
+		expect(monitorVEnd.game.review).toBeNull();
+		expect(aliceVEnd.game.review).toBeNull();
+		// 得点や本戦状態は変わっていない
+		expect(aliceVEnd.game.state.scores[alice.participantId]).toBe(1);
+	});
 });

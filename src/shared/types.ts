@@ -13,6 +13,7 @@ export type Viewer =
 export type Actor =
 	| {role: 'host'}
 	| {role: 'participant'; participantId: string}
+	| {role: 'monitor'}
 	| {role: 'system'};
 
 export interface Participant {
@@ -31,6 +32,11 @@ export interface Question {
 	extra: Record<string, unknown>;
 }
 
+export interface ReviewItem {
+	questionId: string;
+	recordIndex: number;
+}
+
 export interface Game<S = unknown> {
 	id: string;
 	mode: ModeId;
@@ -39,6 +45,7 @@ export interface Game<S = unknown> {
 	questions: Question[];
 	participants: Participant[];
 	state: S;
+	review: {index: number} | null;
 }
 
 /** サーバーからクライアントに届く、閲覧者ごとに投影済みのゲーム */

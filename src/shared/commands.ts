@@ -49,6 +49,9 @@ export const commonCommandSchema = z.discriminatedUnion('type', [
 	}),
 	z.object({type: z.literal('participants.remove'), participantId: z.string()}),
 	z.object({type: z.literal('game.rename'), title: z.string().trim().min(1).max(100)}),
+	z.object({type: z.literal('review.start')}),
+	z.object({type: z.literal('review.move'), index: z.number().int()}),
+	z.object({type: z.literal('review.end')}),
 ]);
 export type CommonCommand = z.infer<typeof commonCommandSchema>;
 export type CommonCommandType = CommonCommand['type'];
@@ -64,11 +67,14 @@ export const commonPermissions: {[K in CommonCommandType]: readonly Role[]} = {
 	'participants.rename': ['host'],
 	'participants.remove': ['host'],
 	'game.rename': ['host'],
+	'review.start': ['host'],
+	'review.move': ['host'],
+	'review.end': ['host'],
 };
 
 export const isCommonCommandType = (type: string): type is CommonCommandType =>
 	Object.hasOwn(commonPermissions, type);
 
-/** 取り消し (undo) の対象にしないコマンド。問題の編集や参加登録は別の画面の操作なので巻き込まない */
+/** 取り消し (undo) の対象にしないコマンド。問題の編集や参加登録、感想戦は別の画面や移動の操作なので巻き込まない */
 export const isUndoableCommandType = (type: string) =>
-	!type.startsWith('questions.') && type !== 'participants.join';
+	!type.startsWith('questions.') && !type.startsWith('review.') && type !== 'participants.join';

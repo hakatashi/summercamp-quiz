@@ -1,5 +1,5 @@
 import type {z} from 'zod';
-import type {CommandContext, Game, ModeId, Role, Viewer} from '../types.ts';
+import type {CommandContext, Game, ModeId, ReviewItem, Role, Viewer} from '../types.ts';
 
 export interface ModeCommand {
 	type: string;
@@ -19,6 +19,8 @@ export interface ModeDefinition<S = unknown, C extends ModeCommand = ModeCommand
 	commandSchema: z.ZodType<C>;
 	/** コマンドの種類ごとに、実行できる role */
 	permissions: {[K in C['type']]: readonly Role[]};
+	/** 感想戦コマンドを実行できる role (省略時は ['host']) */
+	reviewPermissions?: readonly Role[];
 	initialState(): S;
 	/**
 	 * コマンドを適用する。game はコピーなので直接書き換えてよい。
@@ -34,6 +36,8 @@ export interface ModeDefinition<S = unknown, C extends ModeCommand = ModeCommand
 	describe(command: C, game: Game<S>): string;
 	/** 出題済みの問題 ID の集合を返す (省略可) */
 	askedQuestionIds?(game: Game<S>): Set<string>;
+	/** 感想戦で振り返る項目の配列を返す (定義されていない企画では感想戦を開始できない) */
+	reviewItems?(game: Game<S>): ReviewItem[];
 }
 
 /** 型パラメータを消した ModeDefinition (registry で扱うため) */

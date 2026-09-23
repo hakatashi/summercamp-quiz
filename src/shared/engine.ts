@@ -27,6 +27,7 @@ export const createGame = (params: {
 	questions: [],
 	participants: [],
 	state: getMode(params.mode).initialState(),
+	review: null,
 });
 
 const canExecute = (roles: readonly Role[], actor: Actor) =>
@@ -53,7 +54,11 @@ export const parseCommand = (
 		if (!result.success) {
 			throw new CommandError(`不正なコマンドです: ${result.error.message}`);
 		}
-		if (!canExecute(commonPermissions[type], actor)) {
+		const roles =
+			mode.reviewPermissions && type.startsWith('review.')
+				? mode.reviewPermissions
+				: commonPermissions[type];
+		if (!canExecute(roles, actor)) {
 			throw new CommandError('この操作をする権限がありません');
 		}
 		return {kind: 'common', command: result.data};
@@ -200,6 +205,37 @@ const applyCommon = (
 			game.title = command.title;
 			return;
 		}
+		case 'review.start': {
+			if (!mode.reviewItems) {
+				throw new CommandError('この企画では感想戦を行えません');
+			}
+			const items = mode.reviewItems(game);
+			if (items.length === 0) {
+				throw new CommandError('振り返る項目がありません');
+			}
+			game.review = {index: 0};
+			return;
+		}
+		case 'review.move': {
+			if (!mode.reviewItems) {
+				throw new CommandError('この企画では感想戦を行えません');
+			}
+			if (game.review === null) {
+				throw new CommandError('感想戦中ではありません');
+			}
+			const items = mode.reviewItems(game);
+			if (items.length === 0) {
+				throw new CommandError('振り返る項目がありません');
+			}
+			const maxIndex = items.length - 1;
+			const nextIndex = Math.max(0, Math.min(command.index, maxIndex));
+			game.review = {index: nextIndex};
+			return;
+		}
+		case 'review.end': {
+			game.review = null;
+			return;
+		}
 	}
 };
 
@@ -231,6 +267,12 @@ export const describeCommand = (game: Game, raw: {type: string}): string => {
 				return `参加者「${name(command.participantId)}」を削除`;
 			case 'game.rename':
 				return `ゲーム名を「${command.title}」に変更`;
+			case 'review.start':
+				return '感想戦を開始';
+			case 'review.move':
+				return `感想戦を移動 (${command.index + 1}問目)`;
+			case 'review.end':
+				return '感想戦を終了';
 			default:
 				return command.type;
 		}

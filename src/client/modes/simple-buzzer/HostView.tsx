@@ -8,6 +8,7 @@ import {
 	scoreOf,
 	unaskedQuestions,
 } from '../../../shared/modes/simple-buzzer/index.ts';
+import {ReviewControls} from '../../components/ReviewControls.tsx';
 import {useNotify, useRun} from '../../components/Toast.tsx';
 import type {ScreenProps} from '../types.ts';
 import styles from './HostView.module.css';
@@ -117,6 +118,32 @@ export const HostView = ({view, send, undo}: ScreenProps<SimpleBuzzerState>) => 
 	const number = questionNumber(state);
 	const previewQuestion = open || state.phase === 'closed' ? question : nextQuestion;
 
+	const completedQuestionCount = state.history.filter(
+		(r) => r.result !== null && r.result !== 'cancelled',
+	).length;
+
+	if (game.review !== null) {
+		return (
+			<div className={styles.container}>
+				<header className={styles.header}>
+					<div className={styles.titleArea}>
+						<h1 className={styles.title}>{game.title}</h1>
+						<span className={styles.phase}>感想戦中</span>
+					</div>
+					<div className={styles.headerActions}>
+						<Link to={`/games/${game.id}/monitor`} target="_blank">
+							モニター
+						</Link>
+						<Link to={`/games/${game.id}/edit`} target="_blank">
+							問題編集
+						</Link>
+					</div>
+				</header>
+				<ReviewControls game={game} send={send} />
+			</div>
+		);
+	}
+
 	return (
 		<div className={styles.container}>
 			<header className={styles.header}>
@@ -131,6 +158,14 @@ export const HostView = ({view, send, undo}: ScreenProps<SimpleBuzzerState>) => 
 					</span>
 				</div>
 				<div className={styles.headerActions}>
+					<button
+						type="button"
+						onClick={() => act({type: 'review.start'})}
+						disabled={completedQuestionCount === 0}
+						title="出題した問題を振り返る"
+					>
+						感想戦を始める
+					</button>
 					<button type="button" onClick={onUndo} disabled={!undoable} title="直前の操作を取り消す">
 						↶ 取り消し{undoable ? `: ${undoable}` : ''}
 					</button>
@@ -203,6 +238,16 @@ export const HostView = ({view, send, undo}: ScreenProps<SimpleBuzzerState>) => 
 									>
 										{nextQuestion ? '次の問題を出題' : '結果発表 (全問終了)'} <kbd>N</kbd>
 									</button>
+									{state.phase === 'finished' && (
+										<button
+											type="button"
+											className={styles.primary}
+											onClick={() => act({type: 'review.start'})}
+											disabled={completedQuestionCount === 0}
+										>
+											感想戦を始める
+										</button>
+									)}
 									{state.phase === 'closed' && (
 										<button type="button" onClick={() => onCancel(true)}>
 											この問題を未出題に戻す

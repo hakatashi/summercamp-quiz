@@ -8,7 +8,13 @@ import {
 	buzzCommandSchema,
 	registerBuzz,
 } from '../../buzz.ts';
-import {type CommandContext, CommandError, type Game, type Question} from '../../types.ts';
+import {
+	type CommandContext,
+	CommandError,
+	type Game,
+	type Question,
+	type ReviewItem,
+} from '../../types.ts';
 import type {ModeDefinition} from '../types.ts';
 
 export {BUZZ_GRACE_MS, type Buzz, type BuzzDiag, type BuzzStatus};
@@ -288,6 +294,13 @@ export const simpleBuzzer: ModeDefinition<SimpleBuzzerState, SimpleBuzzerCommand
 		if (viewer.role === 'host') {
 			return game;
 		}
+		if (game.review !== null) {
+			const visible = new Set(game.state.history.map((r) => r.questionId));
+			return {
+				...game,
+				questions: game.questions.filter((q) => visible.has(q.id)).map((q) => ({...q, note: ''})),
+			};
+		}
 		// 参加者とモニターには、終了した問題の問題文と答えだけを見せる
 		const open = game.state.phase === 'reading' || game.state.phase === 'answering';
 		const openId = open ? game.state.history.at(-1)?.questionId : undefined;
@@ -298,6 +311,15 @@ export const simpleBuzzer: ModeDefinition<SimpleBuzzerState, SimpleBuzzerCommand
 			...game,
 			questions: game.questions.filter((q) => visible.has(q.id)).map((q) => ({...q, note: ''})),
 		};
+	},
+	reviewItems(game) {
+		const items: ReviewItem[] = [];
+		game.state.history.forEach((record, index) => {
+			if (record.result !== null && record.result !== 'cancelled') {
+				items.push({questionId: record.questionId, recordIndex: index});
+			}
+		});
+		return items;
 	},
 	describe(command, game) {
 		const name = (id: string) => game.participants.find((p) => p.id === id)?.name ?? '?';

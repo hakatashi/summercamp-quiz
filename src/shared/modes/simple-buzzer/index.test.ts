@@ -256,4 +256,53 @@ describe('simple-buzzer', () => {
 		run({type: 'cancel', returnToPool: true});
 		expect(simpleBuzzer.askedQuestionIds?.(game)).toEqual(new Set(['q1']));
 	});
+
+	it('reviewItems は完了した非取消の出題のみを出題順に返す', () => {
+		expect(simpleBuzzer.reviewItems?.(game)).toEqual([]);
+
+		// 1問目: 終了 (正解)
+		run({type: 'next'});
+		buzz('a');
+		run({type: 'judge', correct: true});
+		expect(simpleBuzzer.reviewItems?.(game)).toEqual([{questionId: 'q1', recordIndex: 0}]);
+
+		// 2問目: 出題中 (未終了)
+		run({type: 'next'});
+		expect(simpleBuzzer.reviewItems?.(game)).toEqual([{questionId: 'q1', recordIndex: 0}]);
+
+		// 2問目: 取り消し (プールに戻さない) -> cancelled
+		run({type: 'cancel', returnToPool: false});
+		expect(simpleBuzzer.reviewItems?.(game)).toEqual([{questionId: 'q1', recordIndex: 0}]);
+
+		// 2問目を取り消してプールに戻す
+		run({type: 'cancel', returnToPool: true});
+		expect(simpleBuzzer.reviewItems?.(game)).toEqual([{questionId: 'q1', recordIndex: 0}]);
+
+		// 2問目を再度出題して終了 (スルー)
+		run({type: 'next'});
+		run({type: 'close'});
+		expect(simpleBuzzer.reviewItems?.(game)).toEqual([
+			{questionId: 'q1', recordIndex: 0},
+			{questionId: 'q2', recordIndex: 1},
+		]);
+	});
+
+	it('感想戦中は参加者とモニターに出題済みの全問題の問題文と答えが見える (noteは消去)', () => {
+		run({type: 'next'});
+		buzz('a');
+		run({type: 'judge', correct: true});
+
+		// 感想戦を開始
+		run({type: 'review.start'});
+
+		const monitorGame = projectGame(game, {role: 'monitor'});
+		expect(monitorGame.questions.map((q) => q.id)).toEqual(['q1']);
+		expect(monitorGame.questions[0]?.text).toBe('問題1');
+		expect(monitorGame.questions[0]?.answer).toBe('答え1');
+		expect(monitorGame.questions[0]?.note).toBe('');
+
+		const participantGame = projectGame(game, {role: 'participant', participantId: 'a'});
+		expect(participantGame.questions.map((q) => q.id)).toEqual(['q1']);
+		expect(participantGame.questions[0]?.note).toBe('');
+	});
 });

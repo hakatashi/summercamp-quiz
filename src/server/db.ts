@@ -80,14 +80,20 @@ export class Database {
 				'SELECT id, mode, title, created_at, snapshot, version FROM games WHERE deleted = 0 ORDER BY created_at DESC',
 			)
 			.all();
-		return rows.map((row) => ({
-			id: String(row.id),
-			mode: String(row.mode) as ModeId,
-			title: String(row.title),
-			createdAt: Number(row.created_at),
-			snapshot: JSON.parse(String(row.snapshot)) as Game,
-			version: Number(row.version),
-		}));
+		return rows.map((row) => {
+			const parsed = JSON.parse(String(row.snapshot)) as Game;
+			return {
+				id: String(row.id),
+				mode: String(row.mode) as ModeId,
+				title: String(row.title),
+				createdAt: Number(row.created_at),
+				snapshot: {
+					...parsed,
+					review: parsed.review ?? null,
+				},
+				version: Number(row.version),
+			};
+		});
 	}
 
 	insertGame(game: Game) {

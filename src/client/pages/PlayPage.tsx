@@ -86,6 +86,16 @@ export const PlayPage = () => {
 			)}
 		>
 			{(props) => {
+				if (props.view.game.review !== null) {
+					return (
+						<div className={styles.container}>
+							<div className={styles.form}>
+								<h1>感想戦中</h1>
+								<p>現在、感想戦を行っています。</p>
+							</div>
+						</div>
+					);
+				}
 				const Participant = screens[props.view.game.mode].Participant;
 				return Participant ? <Participant {...props} /> : <Unsupported screen="参加者画面" />;
 			}}

@@ -3,9 +3,11 @@ import type {ModeScreens} from '../types.ts';
 import {HostView} from './HostView.tsx';
 import {MonitorView} from './MonitorView.tsx';
 import {ParticipantView} from './ParticipantView.tsx';
+import {ReviewMonitor} from './ReviewMonitor.tsx';
 
 export const simpleBuzzerScreens: ModeScreens<SimpleBuzzerState> = {
 	Host: HostView,
 	Participant: ParticipantView,
 	Monitor: MonitorView,
+	ReviewMonitor,
 };
