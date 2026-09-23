@@ -53,3 +53,39 @@ export const parseTsv = (input: string): string[][] => {
 	// 空行は捨てる
 	return rows.filter((r) => r.some((c) => c.trim() !== ''));
 };
+
+import type {QuestionInput} from './commands.ts';
+import type {Question} from './types.ts';
+
+export interface TsvExtraColumn {
+	label: string;
+	toExtra: (cell: string) => Partial<Question['extra']>;
+}
+
+/**
+ * TSV の行データを QuestionInput の配列に変換する。
+ * 1列目を問題文、2列目を答え、3列目をメモとし、
+ * 4列目以降は extraColumns の定義に従って Question.extra に割り当てる。
+ */
+export const convertTsvRowsToQuestions = (
+	rows: string[][],
+	extraColumns: readonly TsvExtraColumn[] = [],
+): QuestionInput[] => {
+	return rows.map((row) => {
+		const [text = '', answer = '', note = '', ...extraCells] = row;
+		let extra: Record<string, unknown> = {};
+		for (let i = 0; i < extraColumns.length; i++) {
+			const col = extraColumns[i];
+			const cell = extraCells[i] ?? '';
+			if (col) {
+				extra = {...extra, ...col.toExtra(cell)};
+			}
+		}
+		return {
+			text: text.trim(),
+			answer: answer.trim(),
+			note: note.trim(),
+			extra,
+		};
+	});
+};

@@ -1,4 +1,5 @@
 import type {ComponentType} from 'react';
+import type {TsvExtraColumn} from '../../shared/tsv.ts';
 import type {Question} from '../../shared/types.ts';
 import type {GameConnection} from '../lib/useGame.ts';
 
@@ -22,4 +23,6 @@ export interface ModeScreens<S = unknown> {
 	Monitor?: ComponentType<ScreenProps<S>>;
 	/** 問題編集画面で、企画固有の追加フィールドを編集する部品 (省略可) */
 	QuestionExtraFields?: ComponentType<QuestionExtraFieldsProps>;
+	/** TSV インポート時の追加列の定義 (省略可) */
+	tsvExtraColumns?: TsvExtraColumn[];
 }
