@@ -1,27 +1,17 @@
 import {z} from 'zod';
+import {
+	arrangeBuzzes,
+	BUZZ_GRACE_MS,
+	type Buzz,
+	type BuzzDiag,
+	type BuzzStatus,
+	buzzCommandSchema,
+	registerBuzz,
+} from '../../buzz.ts';
 import {type CommandContext, CommandError, type Game, type Question} from '../../types.ts';
 import type {ModeDefinition} from '../types.ts';
 
-/** クライアントが申告した押下時刻を、受信時刻からどこまで遡って信用するか (ミリ秒) */
-export const BUZZ_GRACE_MS = 500;
-
-export type BuzzStatus =
-	/** 回答権の順番待ち */
-	| 'waiting'
-	/** 回答中 */
-	| 'answering'
-	| 'correct'
-	| 'wrong'
-	/** 問題の終了やリセットで無効になった */
-	| 'void';
-
-export interface Buzz {
-	participantId: string;
-	/** 押した時刻 (サーバー時刻に換算し、補正済み) */
-	pressedAt: number;
-	receivedAt: number;
-	status: BuzzStatus;
-}
+export {BUZZ_GRACE_MS, type Buzz, type BuzzDiag, type BuzzStatus};
 
 export type QuestionResult =
 	/** 誰かが正解した */
@@ -66,7 +56,7 @@ export interface SimpleBuzzerState {
 export const simpleBuzzerCommandSchema = z.discriminatedUnion('type', [
 	/** 次の問題を出題する。questionId を省略すると未出題の問題を並び順で選ぶ */
 	z.object({type: z.literal('next'), questionId: z.string().optional()}),
-	z.object({type: z.literal('buzz'), pressedAt: z.number()}),
+	buzzCommandSchema,
 	z.object({type: z.literal('judge'), correct: z.boolean()}),
 	/** 読み切り (スルー)。現在の問題を終了する */
 	z.object({type: z.literal('close')}),
@@ -127,16 +117,10 @@ const endQuestion = (
 
 /** 未判定の押下を押した順に並べ、先頭に回答権を与える。回答者がいれば true */
 const assignAnswerer = (state: SimpleBuzzerState, record: QuestionRecord) => {
-	const judged = record.buzzes.filter((b) => b.status !== 'waiting' && b.status !== 'answering');
-	const pending = record.buzzes
-		.filter((b) => b.status === 'waiting' || b.status === 'answering')
-		.sort((a, b) => a.pressedAt - b.pressedAt || a.receivedAt - b.receivedAt);
-	pending.forEach((buzz, i) => {
-		buzz.status = i === 0 ? 'answering' : 'waiting';
-	});
-	record.buzzes = [...judged, ...pending];
-	state.phase = pending.length > 0 ? 'answering' : 'reading';
-	return pending.length > 0;
+	const {buzzes, hasAnswerer} = arrangeBuzzes(record.buzzes);
+	record.buzzes = buzzes;
+	state.phase = hasAnswerer ? 'answering' : 'reading';
+	return hasAnswerer;
 };
 
 const apply = (game: G, command: SimpleBuzzerCommand, ctx: CommandContext) => {
@@ -183,14 +167,14 @@ const apply = (game: G, command: SimpleBuzzerCommand, ctx: CommandContext) => {
 			if (record.buzzes.some((b) => b.participantId === participantId && b.status !== 'void')) {
 				throw new CommandError('この問題では既にボタンを押しています');
 			}
-			const pressedAt = Math.max(
-				record.startedAt,
-				ctx.now - BUZZ_GRACE_MS,
-				Math.min(command.pressedAt, ctx.now),
-			);
-			record.buzzes = record.buzzes.filter((b) => b.participantId !== participantId);
-			record.buzzes.push({participantId, pressedAt, receivedAt: ctx.now, status: 'waiting'});
-			assignAnswerer(state, record);
+			const {buzzes} = registerBuzz(record.buzzes, {
+				participantId,
+				declaredPressedAt: command.pressedAt,
+				startedAt: record.startedAt,
+				receivedAt: ctx.now,
+			});
+			record.buzzes = buzzes;
+			state.phase = 'answering';
 			return;
 		}
 		case 'judge': {

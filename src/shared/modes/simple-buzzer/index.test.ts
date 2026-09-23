@@ -126,6 +126,20 @@ describe('simple-buzzer', () => {
 		]);
 	});
 
+	it('diag 情報付きの buzz コマンドを受理できる', () => {
+		run({type: 'next'});
+		run(
+			{
+				type: 'buzz',
+				pressedAt: now + 50,
+				diag: {rtt: 25.4, offset: -8.1},
+			},
+			player('a'),
+			50,
+		);
+		expect(statuses()).toEqual([['a', 'answering']]);
+	});
+
 	it('猶予より前の時刻を申告しても、受信時刻から猶予分までしか遡らない', () => {
 		run({type: 'next'});
 		buzz('a');
