@@ -184,7 +184,12 @@ const applyCommon = (
 			if (game.participants.some((p) => p.name === command.name)) {
 				throw new CommandError('同じ名前の参加者がいます');
 			}
-			game.participants.push({id: command.participantId, name: command.name, joinedAt: ctx.now});
+			game.participants.push({
+				id: command.participantId,
+				name: command.name,
+				joinedAt: ctx.now,
+				kind: 'human',
+			});
 			mode.onParticipantJoined?.(game, command.participantId, ctx);
 			return;
 		}

@@ -104,6 +104,7 @@ const createParticipants = (count: number): Participant[] =>
 		id: `p${i + 1}`,
 		name: count <= 5 ? `参加者${i + 1}` : `参加者${String(i + 1).padStart(2, '0')}`,
 		joinedAt: 100 + i * 10,
+		kind: 'human',
 	}));
 
 describe('Monitor & Review Screenshot Capture', () => {

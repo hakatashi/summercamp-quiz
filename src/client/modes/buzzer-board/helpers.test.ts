@@ -15,6 +15,7 @@ const createParticipant = (id: string, name: string, joinedAt: number): Particip
 	id,
 	name,
 	joinedAt,
+	kind: 'human',
 });
 
 describe('buzzer-board client helpers', () => {

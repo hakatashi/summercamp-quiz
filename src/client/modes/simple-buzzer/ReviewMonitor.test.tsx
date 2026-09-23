@@ -13,9 +13,9 @@ describe('ReviewMonitor', () => {
 			createdAt: 0,
 			review: {index: 0},
 			participants: [
-				{id: 'p1', name: 'アリス', joinedAt: 100},
-				{id: 'p2', name: 'ボブ', joinedAt: 200},
-				{id: 'p3', name: 'キャロル', joinedAt: 300},
+				{id: 'p1', name: 'アリス', joinedAt: 100, kind: 'human'},
+				{id: 'p2', name: 'ボブ', joinedAt: 200, kind: 'human'},
+				{id: 'p3', name: 'キャロル', joinedAt: 300, kind: 'human'},
 			],
 			questions: [
 				{

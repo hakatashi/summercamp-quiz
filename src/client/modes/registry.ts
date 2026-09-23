@@ -8,4 +8,5 @@ import type {ModeScreens} from './types.ts';
 export const screens: Record<ModeId, ModeScreens<any>> = {
 	'simple-buzzer': simpleBuzzerScreens,
 	'buzzer-board': buzzerBoardScreens,
+	palindrome: {},
 };

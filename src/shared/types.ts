@@ -1,5 +1,5 @@
 /** 企画の種類。新しい企画を追加したらここにも足す */
-export type ModeId = 'simple-buzzer' | 'buzzer-board';
+export type ModeId = 'simple-buzzer' | 'buzzer-board' | 'palindrome';
 
 export type Role = 'host' | 'participant' | 'monitor';
 
@@ -20,6 +20,7 @@ export interface Participant {
 	id: string;
 	name: string;
 	joinedAt: number;
+	kind: 'human' | 'ai';
 }
 
 export interface Question {
