@@ -41,6 +41,19 @@ HOST_PASSWORD=ひみつ npm start
 | `HOST_PASSWORD` | なし | 司会者画面・問題編集・ゲーム管理のパスワード。未設定なら誰でも開ける |
 | `DATA_DIR` | `data` | SQLite のデータベースを置くディレクトリ |
 
+### ngrok で公開する
+
+```sh
+# 開発サーバーの場合
+ngrok http 47352
+
+# 本番 (npm start) の場合
+ngrok http 38421
+```
+
+開発サーバーでは、Vite が許可したホスト名以外からのアクセスを拒否します。ngrok のドメイン (`*.ngrok-free.app` など) は許可済みです。
+それ以外のドメインを使うときは、環境変数 `ALLOWED_HOSTS` にカンマ区切りで指定してください (例: `ALLOWED_HOSTS=.example.com npm run dev`)。
+
 ### 画面
 
 | URL | 画面 | 想定する端末 |
