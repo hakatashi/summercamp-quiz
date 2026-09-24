@@ -17,6 +17,10 @@ export interface ReviewMonitorProps<S = unknown> extends ScreenProps<S> {
 export interface QuestionExtraFieldsProps {
 	value: Question['extra'];
 	onChange: (extra: Question['extra']) => void;
+	/** 現在の答え (問題編集フォームとの連携用) */
+	answer?: string;
+	/** 答えの変更 (問題編集フォームとの連携用) */
+	onAnswerChange?: (answer: string) => void;
 }
 
 /** 企画ごとのクライアント側の画面 */
@@ -33,4 +37,6 @@ export interface ModeScreens<S = unknown> {
 	QuestionExtraFields?: ComponentType<QuestionExtraFieldsProps>;
 	/** TSV インポート時の追加列の定義 (省略可) */
 	tsvExtraColumns?: TsvExtraColumn[];
+	/** 問題一覧で表示する警告 (省略可) */
+	questionWarning?: (question: Question) => string | null;
 }

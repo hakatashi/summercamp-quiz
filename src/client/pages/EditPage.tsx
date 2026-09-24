@@ -48,12 +48,12 @@ const QuestionForm = ({
 	return (
 		<form className={styles.form} onSubmit={submit}>
 			<label>
-				問題文
+				問題文{mode === 'palindrome' ? ' (イラスト問題のため省略可)' : ''}
 				<textarea
 					value={draft.text}
 					onChange={(event) => setDraft({...draft, text: event.target.value})}
-					rows={3}
-					required
+					rows={mode === 'palindrome' ? 1 : 3}
+					required={mode !== 'palindrome'}
 				/>
 			</label>
 			<label>
@@ -72,7 +72,12 @@ const QuestionForm = ({
 				/>
 			</label>
 			{ExtraFields && (
-				<ExtraFields value={draft.extra} onChange={(extra) => setDraft({...draft, extra})} />
+				<ExtraFields
+					value={draft.extra}
+					onChange={(extra) => setDraft({...draft, extra})}
+					answer={draft.answer}
+					onAnswerChange={(answer) => setDraft({...draft, answer})}
+				/>
 			)}
 			<div className={pageStyles.row}>
 				<button type="submit">{submitLabel}</button>
@@ -474,6 +479,7 @@ const Editor = ({view, send}: ScreenProps<unknown>) => {
 							<ol className={styles.list}>
 								{filteredQuestions.map(({question, originalIndex}) => {
 									const isAsked = askedIds.has(question.id);
+									const warning = screens[game.mode].questionWarning?.(question);
 									return (
 										<li key={question.id} className={styles.item}>
 											<span className={styles.number}>{originalIndex + 1}</span>
@@ -490,7 +496,17 @@ const Editor = ({view, send}: ScreenProps<unknown>) => {
 													<div className={styles.body}>
 														<div className={styles.text}>
 															{isAsked && <span className={styles.askedBadge}>出題済み</span>}
-															{question.text}
+															{warning && (
+																<span className={styles.warningBadge} title={warning}>
+																	⚠️ {warning}
+																</span>
+															)}
+															{question.text ||
+																(game.mode === 'palindrome' ? (
+																	<span className={pageStyles.muted}>(イラスト問題)</span>
+																) : (
+																	''
+																))}
 														</div>
 														<div>
 															<span className={styles.answerLabel}>答え</span> {question.answer}
