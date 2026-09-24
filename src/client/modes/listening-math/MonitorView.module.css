@@ -1,0 +1,347 @@
+/* 1920×1080 のステージ上の座標で組む */
+.stage {
+	width: 100%;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	padding: 32px 48px;
+	gap: 24px;
+	background:
+		radial-gradient(circle at 15% 0%, #0f5e6e 0%, transparent 55%),
+		radial-gradient(circle at 100% 100%, #3b1d6e 0%, transparent 50%), #0b1120;
+	color: #f8fafc;
+	box-sizing: border-box;
+}
+
+.stage button {
+	font-size: 28px;
+	padding: 12px 28px;
+	border-radius: 14px;
+	border: 2px solid rgb(255 255 255 / 0.3);
+	background: rgb(255 255 255 / 0.1);
+	color: #f8fafc;
+	cursor: pointer;
+}
+
+.stage button:hover:not(:disabled) {
+	background: rgb(255 255 255 / 0.2);
+}
+
+.stage button:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+.stage input {
+	font-size: 28px;
+	width: 140px;
+	padding: 8px 12px;
+	border-radius: 10px;
+	border: 2px solid rgb(255 255 255 / 0.3);
+	background: rgb(0 0 0 / 0.3);
+	color: #f8fafc;
+	text-align: center;
+}
+
+.header {
+	flex: none;
+	height: 80px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 24px;
+}
+
+.titleArea {
+	display: flex;
+	align-items: center;
+	gap: 20px;
+	min-width: 0;
+}
+
+.badge {
+	flex: none;
+	font-size: 26px;
+	font-weight: 800;
+	background: #0891b2;
+	color: #ffffff;
+	padding: 6px 22px;
+	border-radius: 999px;
+	letter-spacing: 0.05em;
+}
+
+.title {
+	font-size: 36px;
+	font-weight: 700;
+	opacity: 0.85;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.headerRight {
+	flex: none;
+	font-size: 36px;
+	font-weight: 700;
+	opacity: 0.85;
+	font-variant-numeric: tabular-nums;
+}
+
+.center {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 40px;
+}
+
+.lead {
+	margin: 0;
+	font-size: 36px;
+	opacity: 0.85;
+}
+
+.status {
+	margin: 0;
+	font-size: 34px;
+	color: #fde68a;
+}
+
+.done {
+	margin: 0;
+	font-size: 64px;
+	font-weight: 800;
+}
+
+.warning {
+	margin: 0;
+	font-size: 30px;
+	color: #fca5a5;
+}
+
+.actions {
+	display: flex;
+	gap: 40px;
+	align-items: center;
+}
+
+.stage .bigButton {
+	font-size: 64px;
+	font-weight: 800;
+	padding: 36px 88px;
+	border-radius: 32px;
+	border: none;
+	background: linear-gradient(135deg, #06b6d4, #2563eb);
+	box-shadow: 0 16px 40px rgb(0 0 0 / 0.4);
+}
+
+.stage .bigButton:hover:not(:disabled) {
+	background: linear-gradient(135deg, #22d3ee, #3b82f6);
+}
+
+.stage .bigButtonSub {
+	font-size: 44px;
+	font-weight: 700;
+	padding: 28px 56px;
+	border-radius: 28px;
+}
+
+.settings {
+	display: flex;
+	gap: 48px;
+	align-items: center;
+	padding: 24px 40px;
+	border-radius: 24px;
+	background: rgb(255 255 255 / 0.06);
+	border: 2px solid rgb(255 255 255 / 0.12);
+}
+
+.settingRow {
+	display: flex;
+	gap: 16px;
+	align-items: center;
+	font-size: 30px;
+}
+
+.stage .reviewButton {
+	font-weight: 700;
+	background: rgb(234 179 8 / 0.25);
+	border-color: rgb(234 179 8 / 0.6);
+}
+
+/* 出題中 */
+.counter {
+	display: flex;
+	align-items: baseline;
+	gap: 24px;
+	font-weight: 900;
+	font-variant-numeric: tabular-nums;
+}
+
+.counterLabel {
+	font-size: 120px;
+}
+
+.counterNumber {
+	font-size: 320px;
+	line-height: 1;
+	color: #67e8f9;
+}
+
+.counterTotal {
+	margin-left: 32px;
+	font-size: 80px;
+	opacity: 0.7;
+}
+
+.progressTrack {
+	position: relative;
+	width: 1600px;
+	height: 40px;
+	border-radius: 20px;
+	background: rgb(255 255 255 / 0.12);
+	overflow: hidden;
+}
+
+.progressFill {
+	position: absolute;
+	inset: 0 auto 0 0;
+	background: linear-gradient(90deg, #06b6d4, #3b82f6);
+}
+
+.progressTick {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 3px;
+	margin-left: -1px;
+	background: rgb(11 17 32 / 0.6);
+}
+
+.trackTime {
+	font-size: 36px;
+	opacity: 0.7;
+	font-variant-numeric: tabular-nums;
+}
+
+.footer {
+	flex: none;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 24px;
+	min-height: 72px;
+}
+
+.controls {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+}
+
+/* 振り返り */
+.review {
+	flex: 1;
+	min-height: 0;
+	display: grid;
+	grid-template-columns: 1fr 520px;
+	grid-template-rows: minmax(0, 0.8fr) minmax(0, 1.2fr);
+	gap: 24px;
+}
+
+.panel {
+	position: relative;
+	min-height: 0;
+	overflow: hidden;
+	padding: 60px 36px 28px;
+	border-radius: 24px;
+	background: rgb(255 255 255 / 0.08);
+	border: 2px solid rgb(255 255 255 / 0.16);
+	box-shadow: 0 12px 32px rgb(0 0 0 / 0.25);
+}
+
+.panelLabel {
+	position: absolute;
+	top: 16px;
+	left: 28px;
+	font-size: 26px;
+	font-weight: 800;
+	letter-spacing: 0.1em;
+	color: #67e8f9;
+}
+
+.questionPanel {
+	display: flex;
+	align-items: center;
+}
+
+.questionText {
+	line-height: 1.5;
+	font-weight: 600;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.answerPanel {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgb(234 179 8 / 0.14);
+	border-color: rgb(234 179 8 / 0.5);
+}
+
+.answerPanel .panelLabel {
+	color: #fde047;
+}
+
+.answerText {
+	font-size: 96px;
+	font-weight: 900;
+	line-height: 1.2;
+	text-align: center;
+	overflow-wrap: anywhere;
+	color: #fef08a;
+}
+
+.explanationPanel {
+	grid-column: 1 / -1;
+}
+
+.explanation {
+	line-height: 1.6;
+}
+
+.placeholder {
+	font-size: 36px;
+	opacity: 0.5;
+}
+
+.stage .playButton {
+	font-weight: 700;
+	background: linear-gradient(135deg, #06b6d4, #2563eb);
+	border: none;
+}
+
+.reviewTime {
+	font-size: 28px;
+	opacity: 0.8;
+	font-variant-numeric: tabular-nums;
+}
+
+.stage .endButton {
+	margin-left: 24px;
+	font-size: 24px;
+	opacity: 0.8;
+}
+
+.source {
+	font-size: 26px;
+	opacity: 0.7;
+	text-align: right;
+	max-width: 640px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}

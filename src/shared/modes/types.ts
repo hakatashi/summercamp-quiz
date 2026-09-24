@@ -21,6 +21,11 @@ export interface ModeDefinition<S = unknown, C extends ModeCommand = ModeCommand
 	permissions: {[K in C['type']]: readonly Role[]};
 	/** 感想戦コマンドを実行できる role (省略時は ['host']) */
 	reviewPermissions?: readonly Role[];
+	/**
+	 * true ならモニターの購読にも司会者パスワードを要求し、permissions に 'monitor' を含むコマンドを
+	 * モニターから実行できるようにする。false (省略時) のモニターは閲覧専用で、コマンドを一切送れない
+	 */
+	monitorRequiresHost?: boolean;
 	initialState(): S;
 	/**
 	 * コマンドを適用する。game はコピーなので直接書き換えてよい。

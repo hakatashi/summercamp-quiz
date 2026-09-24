@@ -7,7 +7,7 @@ export interface SubscribeRequest {
 	role: Role;
 	/** 参加者トークン (role が participant のとき) */
 	token?: string | undefined;
-	/** 司会者パスワード (role が host のとき) */
+	/** 司会者パスワード (role が host のとき、または monitorRequiresHost の企画で role が monitor のとき) */
 	password?: string | undefined;
 }
 

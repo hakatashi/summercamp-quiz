@@ -1,5 +1,5 @@
 /** 企画の種類。新しい企画を追加したらここにも足す */
-export type ModeId = 'simple-buzzer' | 'buzzer-board' | 'palindrome';
+export type ModeId = 'simple-buzzer' | 'buzzer-board' | 'palindrome' | 'listening-math';
 
 export type Role = 'host' | 'participant' | 'monitor';
 

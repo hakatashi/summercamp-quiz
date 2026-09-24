@@ -2,7 +2,7 @@ import type {Server as HttpServer} from 'node:http';
 import {Server, type Socket} from 'socket.io';
 import {z} from 'zod';
 import {projectGame} from '../shared/engine.ts';
-import {isModeId} from '../shared/modes/registry.ts';
+import {getMode, isModeId} from '../shared/modes/registry.ts';
 import type {Ack, ClientToServerEvents, ServerToClientEvents} from '../shared/protocol.ts';
 import {type Actor, CommandError, type GameView, type Viewer} from '../shared/types.ts';
 import {isHostPasswordValid} from './auth.ts';
@@ -227,7 +227,8 @@ export const attachSocketServer = (
 					throw new CommandError('不正なリクエストです');
 				}
 				const {gameId, role, token, password} = request.data;
-				if (!manager.get(gameId)) {
+				const entry = manager.get(gameId);
+				if (!entry) {
 					throw new CommandError('ゲームが見つかりません');
 				}
 				let viewer: Viewer;
@@ -243,6 +244,10 @@ export const attachSocketServer = (
 					}
 					viewer = {role: 'participant', participantId};
 				} else {
+					// モニターから操作できる企画では、モニターにも司会者パスワードを求める
+					if (getMode(entry.game.mode).monitorRequiresHost && !isHost(password)) {
+						throw new CommandError('司会者パスワードが違います');
+					}
 					viewer = {role: 'monitor'};
 				}
 
@@ -274,7 +279,9 @@ export const attachSocketServer = (
 				if (!gameId || !viewer) {
 					throw new CommandError('ゲームを購読していません');
 				}
-				if (viewer.role === 'monitor') {
+				// 認証していないモニターからは操作させない。どのコマンドを送れるかは parseCommand が permissions で判定する
+				const entry = manager.get(gameId);
+				if (viewer.role === 'monitor' && !(entry && getMode(entry.game.mode).monitorRequiresHost)) {
 					throw new CommandError('モニターからは操作できません');
 				}
 				const actor: Actor = viewer;

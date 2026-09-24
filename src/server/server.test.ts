@@ -1,6 +1,7 @@
 import {io as connect, type Socket} from 'socket.io-client';
 import {afterEach, beforeEach, describe, expect, it} from 'vitest';
 import type {BuzzerBoardState} from '../shared/modes/buzzer-board/index.ts';
+import type {ListeningMathState} from '../shared/modes/listening-math/index.ts';
 import type {SimpleBuzzerState} from '../shared/modes/simple-buzzer/index.ts';
 import type {ClientToServerEvents, ServerToClientEvents} from '../shared/protocol.ts';
 import type {GameView} from '../shared/types.ts';
@@ -471,5 +472,81 @@ describe('サーバー', () => {
 		// phase が board-judging に戻り、得点も 5 に戻る
 		expect(hUndoneV.game.state.phase).toBe('board-judging');
 		expect(hUndoneV.game.state.scores[alice.participantId]).toBe(5);
+	});
+
+	it('既存の企画のモニターは閲覧専用で、コマンドを送れない', async () => {
+		const {gameId} = await setupGame();
+		const monitor = await client();
+		expect(await call(monitor, 'subscribe', {gameId, role: 'monitor'})).toMatchObject({ok: true});
+		expect(await call(monitor, 'command', {type: 'next'})).toEqual({
+			ok: false,
+			error: 'モニターからは操作できません',
+		});
+		expect(await call(monitor, 'command', {type: 'review.start'})).toMatchObject({ok: false});
+	});
+
+	it('listening-math: モニターの購読に司会者パスワードが要り、モニターから出題と振り返りを操作できる', async () => {
+		const host = await client();
+		const created = await call(host, 'createGame', {
+			mode: 'listening-math',
+			title: 'リスニング数学',
+			password: PASSWORD,
+		});
+		const gameId = created.gameId as string;
+		await call(host, 'subscribe', {gameId, role: 'host', password: PASSWORD});
+		await call(host, 'command', {
+			type: 'questions.import',
+			replace: true,
+			questions: [
+				{
+					text: '問題1',
+					answer: '1',
+					extra: {audio: 'a1', explanation: '$1$', source: 'オリジナル'},
+				},
+				{text: '問題2', answer: '2', extra: {audio: 'a2'}},
+			],
+		});
+
+		const monitor = await client();
+		expect(await call(monitor, 'subscribe', {gameId, role: 'monitor'})).toEqual({
+			ok: false,
+			error: '司会者パスワードが違います',
+		});
+		expect(
+			await call(monitor, 'subscribe', {gameId, role: 'monitor', password: 'x'}),
+		).toMatchObject({ok: false});
+		expect(
+			await call(monitor, 'subscribe', {gameId, role: 'monitor', password: PASSWORD}),
+		).toMatchObject({ok: true});
+
+		const playing = waitForView<ListeningMathState>(
+			monitor,
+			(v) => v.game.state.phase === 'playing' && v.game.state.currentIndex === 1,
+		);
+		expect(await call(monitor, 'command', {type: 'play'})).toEqual({ok: true});
+		expect(await call(monitor, 'command', {type: 'progress', index: 1})).toEqual({ok: true});
+		const playingView = await playing;
+		// 出題中は問題文と答えを送らない
+		expect(playingView.game.questions.map((q) => [q.text, q.answer, q.extra])).toEqual([
+			['', '', {audio: 'a1'}],
+			['', '', {audio: 'a2'}],
+		]);
+
+		// モニターでも問題の編集はできない
+		expect(await call(monitor, 'command', {type: 'questions.delete', id: 'x'})).toEqual({
+			ok: false,
+			error: 'この操作をする権限がありません',
+		});
+
+		expect(await call(monitor, 'command', {type: 'finish'})).toEqual({ok: true});
+		const reviewing = waitForView<ListeningMathState>(monitor, (v) => v.game.review?.index === 1);
+		expect(await call(monitor, 'command', {type: 'review.start'})).toEqual({ok: true});
+		expect(await call(monitor, 'command', {type: 'review.move', index: 1})).toEqual({ok: true});
+		const reviewView = await reviewing;
+		expect(reviewView.game.questions[0]).toMatchObject({
+			text: '問題1',
+			answer: '1',
+			extra: {audio: 'a1', explanation: '$1$', source: 'オリジナル'},
+		});
 	});
 });

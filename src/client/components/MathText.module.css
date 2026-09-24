@@ -1,0 +1,14 @@
+.text {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+/* KaTeX の数式は折り返さない (pre-wrap を引き継がない) */
+.text :global(.katex) {
+	white-space: nowrap;
+	font-size: 1.1em;
+}
+
+.text :global(.katex-display) {
+	margin: 0.4em 0;
+}
