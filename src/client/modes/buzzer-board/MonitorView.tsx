@@ -6,6 +6,7 @@ import {
 } from '../../../shared/modes/buzzer-board/index.ts';
 import type {ScreenProps} from '../types.ts';
 import {
+	boardListLayout,
 	findQuestion,
 	isOpen,
 	participantName,
@@ -16,6 +17,10 @@ import {
 	standings,
 } from './helpers.ts';
 import styles from './MonitorView.module.css';
+
+/** ボードクイズの参加者リストに使える高さ (パネルの内側の高さから見出しの分を引いたもの) */
+const BOARD_RESULT_LIST_HEIGHT = 350;
+const BOARD_STATUS_LIST_HEIGHT = 250;
 
 const markOf = {correct: '○', wrong: '×', answering: '', waiting: '', void: ''} as const;
 
@@ -41,9 +46,22 @@ export const MonitorView = ({view}: ScreenProps<BuzzerBoardState>) => {
 	const isClosedBoard = state.phase === 'closed' && Boolean(record?.board);
 	const clearedParticipants = game.participants.filter((p) => state.cleared[p.id]);
 	const boardAnswers = record?.board?.answers ?? {};
-	const submittedCount = clearedParticipants.filter(
-		(p) => boardAnswers[p.id]?.submittedAt !== null,
-	).length;
+	const hasSubmitted = (participantId: string) =>
+		(boardAnswers[participantId]?.submittedAt ?? null) !== null;
+	const submittedCount = clearedParticipants.filter((p) => hasSubmitted(p.id)).length;
+	const isBoardConfirmed = record?.board?.confirmedAt != null;
+	// 参加者が多くても枠内に収まるよう、人数に応じて列数と文字の大きさを変える
+	const boardLayout = isBoardConfirmed
+		? boardListLayout(clearedParticipants.length, BOARD_RESULT_LIST_HEIGHT, {maxColumns: 3})
+		: boardListLayout(clearedParticipants.length, BOARD_STATUS_LIST_HEIGHT, {maxColumns: 5});
+	const boardListStyle = {
+		gridTemplateColumns: `repeat(${boardLayout.columns}, minmax(0, 1fr))`,
+		gridAutoRows: `${boardLayout.rowHeight}px`,
+		fontSize: boardLayout.fontSize,
+		gap: boardLayout.gap,
+	};
+	// ボードクイズ中は、読み上げ済みの問題文を出す (答えは投影で隠されている)
+	const boardQuestion = isBoard && record ? findQuestion(game, record.questionId) : undefined;
 
 	const chooserText = state.genreChooser
 		? `${participantName(game, state.genreChooser)} が選択中`
@@ -98,15 +116,12 @@ export const MonitorView = ({view}: ScreenProps<BuzzerBoardState>) => {
 					{isBoard || isClosedBoard ? (
 						<section className={styles.panel}>
 							<div className={styles.panelLabel}>
-								{record?.board?.confirmedAt !== null ? 'ボードクイズ結果' : 'ボードクイズ'}
+								{isBoardConfirmed ? 'ボードクイズ結果' : 'ボードクイズ'}
 							</div>
 							{record?.genre && <div className={styles.panelGenreBadge}>{record.genre}</div>}
 							<div className={styles.boardPanelContent}>
-								{record?.board?.confirmedAt !== null ? (
-									<ul
-										className={styles.boardConfirmedList}
-										data-compact={clearedParticipants.length > 8}
-									>
+								{isBoardConfirmed ? (
+									<ul className={styles.boardConfirmedList} style={boardListStyle}>
 										{clearedParticipants.map((p) => {
 											const ans = boardAnswers[p.id];
 											const text =
@@ -138,17 +153,18 @@ export const MonitorView = ({view}: ScreenProps<BuzzerBoardState>) => {
 										<div className={styles.boardMonitorSub}>
 											回答済み: {submittedCount} / {clearedParticipants.length} 人
 										</div>
-										<ul
-											className={styles.boardMonitorList}
-											data-compact={clearedParticipants.length > 12}
-										>
+										<ul className={styles.boardMonitorList} style={boardListStyle}>
 											{clearedParticipants.map((p) => {
-												const hasSubmitted = boardAnswers[p.id]?.submittedAt !== null;
+												const submitted = hasSubmitted(p.id);
 												return (
-													<li key={p.id} className={styles.boardMonitorItem}>
+													<li
+														key={p.id}
+														className={styles.boardMonitorItem}
+														data-submitted={submitted}
+													>
 														<span className={styles.boardMonitorItemName}>{p.name}</span>
 														<span className={styles.boardMonitorItemStatus}>
-															{hasSubmitted ? '回答済' : '未回答'}
+															{submitted ? '回答済' : '未回答'}
 														</span>
 													</li>
 												);
@@ -213,27 +229,43 @@ export const MonitorView = ({view}: ScreenProps<BuzzerBoardState>) => {
 						</section>
 					)}
 
-					<section className={styles.panel}>
-						<div className={styles.panelLabel}>
-							前の問題{previous && ` (第 ${state.history.indexOf(previous) + 1} 問)`}
-						</div>
-						{previousQuestion && !(isOpen(state) && previous === record) ? (
-							<>
+					{isBoard ? (
+						<section className={styles.panel}>
+							<div className={styles.panelLabel}>問題</div>
+							{boardQuestion ? (
 								<p
-									className={styles.previousText}
-									style={{fontSize: questionFontSize(previousQuestion.text)}}
+									className={styles.boardQuestionText}
+									style={{fontSize: questionFontSize(boardQuestion.text)}}
 								>
-									{previousQuestion.text}
+									{boardQuestion.text}
 								</p>
-								<p className={styles.previousAnswer}>
-									<span className={styles.answerLabel}>A.</span>
-									{previousQuestion.answer}
-								</p>
-							</>
-						) : (
-							<div className={styles.placeholder}>—</div>
-						)}
-					</section>
+							) : (
+								<div className={styles.placeholder}>—</div>
+							)}
+						</section>
+					) : (
+						<section className={styles.panel}>
+							<div className={styles.panelLabel}>
+								前の問題{previous && ` (第 ${state.history.indexOf(previous) + 1} 問)`}
+							</div>
+							{previousQuestion && !(isOpen(state) && previous === record) ? (
+								<>
+									<p
+										className={styles.previousText}
+										style={{fontSize: questionFontSize(previousQuestion.text)}}
+									>
+										{previousQuestion.text}
+									</p>
+									<p className={styles.previousAnswer}>
+										<span className={styles.answerLabel}>A.</span>
+										{previousQuestion.answer}
+									</p>
+								</>
+							) : (
+								<div className={styles.placeholder}>—</div>
+							)}
+						</section>
+					)}
 				</div>
 
 				<section className={`${styles.panel} ${styles.scoreboard}`}>

@@ -588,8 +588,11 @@ describe('buzzer-board mode', () => {
 			expect(mAns?.p1?.submittedAt).toBe(2100);
 			expect(mAns?.p2?.text).toBe('');
 			expect(mAns?.p2?.correct).toBeNull();
-			// 問題の答えも隠蔽されている
-			expect(monitorProj.questions.length).toBe(0);
+			// モニターには問題文だけを見せ、答えは隠蔽されている
+			expect(monitorProj.questions.length).toBe(1);
+			expect(monitorProj.questions[0]?.text).toBe('ノンジャンルの問題1');
+			expect(monitorProj.questions[0]?.answer).toBe('');
+			expect(monitorProj.questions[0]?.note).toBe('');
 
 			// 2. p1 (本人)
 			const p1Proj = buzzerBoard.project(game, {role: 'participant', participantId: 'p1'});
@@ -597,6 +600,8 @@ describe('buzzer-board mode', () => {
 			// 自分の回答は見え、判定は確定前は見えない
 			expect(p1Ans?.p1?.text).toBe('秘密の回答1');
 			expect(p1Ans?.p1?.correct).toBeNull();
+			// 参加者には出題中の問題文も答えも送らない
+			expect(p1Proj.questions.length).toBe(0);
 			// 他人の回答は見えず、判定も見えない
 			expect(p1Ans?.p2?.text).toBe('');
 			expect(p1Ans?.p2?.correct).toBeNull();

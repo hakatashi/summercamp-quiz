@@ -46,9 +46,10 @@ export const findQuestion = (game: BuzzerBoardGame, questionId: string): Questio
 export const isOpen = (state: BuzzerBoardState) =>
 	state.phase === 'reading' || state.phase === 'answering';
 
-/** 画面に「前の問題」として出す記録 (出題中の問題は除く) */
+/** 画面に「前の問題」として出す記録 (出題中・ボードクイズ中の問題は除く) */
 export const previousRecord = (state: BuzzerBoardState): QuestionRecord | null => {
-	const closed = state.history.filter((r) => r.result !== null);
+	const boardOpen = isBoardPhase(state.phase) ? state.history.at(-1) : undefined;
+	const closed = state.history.filter((r) => r.result !== null && r !== boardOpen);
 	return closed.at(-1) ?? null;
 };
 
@@ -123,6 +124,31 @@ export const scoreboardLayout = (count: number, available = 740) => {
 	const rows = Math.max(1, Math.ceil(count / columns));
 	const rowHeight = Math.min(96, Math.floor(available / rows));
 	return {columns, rows, rowHeight};
+};
+
+/**
+ * ボードクイズの参加者リストが枠内に収まるよう、人数から列数と行の高さを決める。
+ * 最大列数でも収まらないときは最小の高さにして、リスト側をスクロールさせる
+ */
+export const boardListLayout = (
+	count: number,
+	available: number,
+	{maxColumns = 3, minRowHeight = 24, maxRowHeight = 52} = {},
+) => {
+	const measure = (columns: number, gap: number) => {
+		const rows = Math.max(1, Math.ceil(count / columns));
+		return {columns, rows, gap, rowHeight: Math.floor((available - gap * (rows - 1)) / rows)};
+	};
+	let layout = measure(1, 8);
+	for (let columns = 2; columns <= maxColumns && layout.rowHeight < 40; columns++) {
+		layout = measure(columns, 8);
+	}
+	// 最大列数でも窮屈なら行間を詰める
+	if (layout.rowHeight < 40) {
+		layout = measure(layout.columns, 4);
+	}
+	const rowHeight = Math.max(minRowHeight, Math.min(maxRowHeight, layout.rowHeight));
+	return {...layout, rowHeight, fontSize: Math.round(rowHeight * 0.5)};
 };
 
 /** 問題文の長さに応じて文字の大きさを変える */

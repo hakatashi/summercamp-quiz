@@ -47,6 +47,15 @@ export const ParticipantView = ({view, send, participantId}: ScreenProps<BuzzerB
 	const [boardInput, setBoardInput] = useState('');
 
 	const record = currentRecord(state);
+	// 別の問題のボードクイズになったら、前の問題で入力した回答を消す
+	const boardKey = record?.board ? `${state.history.length}:${record.startedAt}` : null;
+	const [prevBoardKey, setPrevBoardKey] = useState(boardKey);
+	if (boardKey !== prevBoardKey) {
+		setPrevBoardKey(boardKey);
+		if (boardKey !== null) {
+			setBoardInput('');
+		}
+	}
 	const myBuzz = record?.buzzes.find(
 		(b) => b.participantId === participantId && b.status !== 'void',
 	);

@@ -97,7 +97,7 @@ export const HostView = ({view, send, undo}: ScreenProps<BuzzerBoardState>) => {
 	const clearedParticipants = game.participants.filter((p) => state.cleared[p.id]);
 	const boardAnswers = record?.board?.answers ?? {};
 	const submittedCount = clearedParticipants.filter(
-		(p) => boardAnswers[p.id]?.submittedAt !== null,
+		(p) => (boardAnswers[p.id]?.submittedAt ?? null) !== null,
 	).length;
 	const unjudgedCount = clearedParticipants.filter(
 		(p) => !boardAnswers[p.id] || boardAnswers[p.id]?.correct === null,

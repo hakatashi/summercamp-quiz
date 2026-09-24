@@ -624,13 +624,29 @@ export const buzzerBoard: ModeDefinition<BuzzerBoardState, BuzzerBoardCommand> =
 			};
 		});
 
+		// ボードクイズ中は問題文を読み終えているので、モニターには出題中の問題文だけを見せる (答えは隠す)
+		const boardOpenId =
+			viewer.role === 'monitor' &&
+			game.review === null &&
+			(game.state.phase === 'board-answering' || game.state.phase === 'board-judging')
+				? openId
+				: undefined;
+
 		return {
 			...game,
 			state: {
 				...stateWithCounts,
 				history: projectedHistory,
 			},
-			questions: game.questions.filter((q) => visible.has(q.id)).map((q) => ({...q, note: ''})),
+			questions: game.questions.flatMap((q) => {
+				if (visible.has(q.id)) {
+					return [{...q, note: ''}];
+				}
+				if (q.id === boardOpenId) {
+					return [{...q, answer: '', note: ''}];
+				}
+				return [];
+			}),
 		};
 	},
 	reviewItems(game) {

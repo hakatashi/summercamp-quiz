@@ -2,6 +2,7 @@ import {describe, expect, it} from 'vitest';
 import type {BuzzerBoardState} from '../../../shared/modes/buzzer-board/index.ts';
 import type {Game, Participant} from '../../../shared/types.ts';
 import {
+	boardListLayout,
 	isOpen,
 	normalizeAnswer,
 	participantName,
@@ -34,6 +35,26 @@ describe('buzzer-board client helpers', () => {
 		expect(layout40.columns).toBe(2);
 		expect(layout40.rows).toBe(20);
 		expect(layout40.rowHeight).toBe(37);
+	});
+
+	it('boardListLayout は人数が多いと列を増やし、行の高さを縮める', () => {
+		const small = boardListLayout(4, 350);
+		expect(small.columns).toBe(1);
+		expect(small.rowHeight).toBe(52);
+
+		const medium = boardListLayout(12, 350);
+		expect(medium.columns).toBe(2);
+		expect(medium.rows).toBe(6);
+
+		const large = boardListLayout(30, 350);
+		expect(large.columns).toBe(3);
+		expect(large.rows).toBe(10);
+		expect(large.rows * large.rowHeight + (large.rows - 1) * large.gap).toBeLessThanOrEqual(350);
+
+		// 最大列数でも収まらないときは最小の高さにする (リスト側でスクロールする)
+		const huge = boardListLayout(100, 250, {maxColumns: 3});
+		expect(huge.columns).toBe(3);
+		expect(huge.rowHeight).toBe(24);
 	});
 
 	it('questionFontSize は問題文の長さに応じて文字サイズを返す', () => {
