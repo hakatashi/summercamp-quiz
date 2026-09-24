@@ -98,6 +98,8 @@ describe('Palindrome Views', () => {
 			expect(html).toContain('開放済み');
 			expect(html).toContain('寝具から動物が出てきています');
 			expect(html).toContain('ひらがなで入力');
+			expect(html).toContain('enterKeyHint="send"');
+			expect(html).toContain('autoCapitalize="none"');
 			expect(html).toContain('誤答 (1 回)');
 			expect(html).toContain('まくらのくま');
 		});

@@ -1,4 +1,4 @@
-import {type FormEvent, useEffect, useMemo, useState} from 'react';
+import {type FormEvent, useEffect, useMemo, useRef, useState} from 'react';
 import {mediaUrl} from '../../../shared/media.ts';
 import {
 	computeQuestionPenalty,
@@ -27,15 +27,59 @@ import styles from './ParticipantView.module.css';
 
 const HINT_ORDER: HintKind[] = ['situation', 'irasutoya', 'charTypes'];
 
+/** 経過時間表示バッジ (タイマー更新の再レンダリングを局所化) */
+interface ElapsedTimeBadgeProps {
+	openedAt?: number | null;
+	closedAt?: number | null;
+	correctAt?: number | null;
+	isOpen: boolean;
+	isCorrect: boolean;
+}
+
+const ElapsedTimeBadge = ({
+	openedAt,
+	closedAt,
+	correctAt,
+	isOpen,
+	isCorrect,
+}: ElapsedTimeBadgeProps) => {
+	const [now, setNow] = useState(Date.now());
+
+	useEffect(() => {
+		if (!isOpen || isCorrect || !openedAt) return;
+		const timer = setInterval(() => setNow(Date.now()), 100);
+		return () => clearInterval(timer);
+	}, [isOpen, isCorrect, openedAt]);
+
+	const elapsedMs = useMemo(() => {
+		if (!openedAt) return null;
+		if (isCorrect && correctAt) {
+			return correctAt - openedAt;
+		}
+		if (isOpen) {
+			return Math.max(0, now - openedAt);
+		}
+		if (closedAt) {
+			return closedAt - openedAt;
+		}
+		return null;
+	}, [openedAt, isCorrect, correctAt, isOpen, closedAt, now]);
+
+	return (
+		<div className={styles.timerBadge}>{isOpen || isCorrect ? formatTime(elapsedMs) : '—'}</div>
+	);
+};
+
 export const ParticipantView = ({view, send, participantId}: ScreenProps<PalindromeState>) => {
 	const {game} = view;
 	const {state} = game;
 	const notify = useNotify();
 
 	const [inputText, setInputText] = useState('');
-	const [isComposing, setIsComposing] = useState(false);
 	const [isLightboxOpen, setIsLightboxOpen] = useState(false);
-	const [now, setNow] = useState(Date.now());
+	const isComposingRef = useRef(false);
+	const justEndedCompositionRef = useRef(false);
+	const inputRef = useRef<HTMLInputElement>(null);
 
 	const record = currentRecord(state);
 	const question = record ? findQuestion(game, record.questionId) : undefined;
@@ -57,27 +101,17 @@ export const ParticipantView = ({view, send, participantId}: ScreenProps<Palindr
 		setIsLightboxOpen(false);
 	}, [record?.questionId]);
 
-	// リアルタイムタイマー (正解前かつ出題中のみ定期更新)
-	useEffect(() => {
-		if (!currentOpen || isCorrect) return;
-		const timer = setInterval(() => setNow(Date.now()), 100);
-		return () => clearInterval(timer);
-	}, [currentOpen, isCorrect]);
-
-	// 経過時間 (ms) の計算
-	const elapsedMs = useMemo(() => {
+	// 確定経過時間 (ms) の計算 (正解時のみ表示に使用。出題中のリアルタイムタイマーは ElapsedTimeBadge で局所管理)
+	const resolvedElapsedMs = useMemo(() => {
 		if (!record) return null;
 		if (isCorrect && pRec?.correctAt) {
 			return pRec.correctAt - record.openedAt;
-		}
-		if (currentOpen) {
-			return Math.max(0, now - record.openedAt);
 		}
 		if (record.closedAt) {
 			return record.closedAt - record.openedAt;
 		}
 		return null;
-	}, [record, isCorrect, pRec?.correctAt, currentOpen, now]);
+	}, [record, isCorrect, pRec?.correctAt]);
 
 	// 順位
 	const myRank = useMemo(() => {
@@ -91,9 +125,9 @@ export const ParticipantView = ({view, send, participantId}: ScreenProps<Palindr
 
 	// 記録時間 (正解時のみ)
 	const recordTimeMs = useMemo(() => {
-		if (!isCorrect || elapsedMs === null) return null;
-		return elapsedMs + penaltyMs;
-	}, [isCorrect, elapsedMs, penaltyMs]);
+		if (!isCorrect || resolvedElapsedMs === null) return null;
+		return resolvedElapsedMs + penaltyMs;
+	}, [isCorrect, resolvedElapsedMs, penaltyMs]);
 
 	// 入力中の文字のバリデーション
 	const validationError = useMemo(() => {
@@ -109,6 +143,7 @@ export const ParticipantView = ({view, send, participantId}: ScreenProps<Palindr
 
 	const handleSubmit = async (event?: FormEvent) => {
 		if (event) event.preventDefault();
+		if (isComposingRef.current || justEndedCompositionRef.current) return;
 		if (!canSubmit) return;
 
 		try {
@@ -159,9 +194,13 @@ export const ParticipantView = ({view, send, participantId}: ScreenProps<Palindr
 					<span className={styles.gameTitle}>{game.title}</span>
 					<span className={styles.participantName}>{pName}</span>
 				</div>
-				<div className={styles.timerBadge}>
-					{currentOpen || isCorrect ? formatTime(elapsedMs) : '—'}
-				</div>
+				<ElapsedTimeBadge
+					openedAt={record?.openedAt}
+					closedAt={record?.closedAt}
+					correctAt={pRec?.correctAt}
+					isOpen={currentOpen}
+					isCorrect={isCorrect}
+				/>
 			</header>
 
 			<main className={styles.main}>
@@ -199,7 +238,9 @@ export const ParticipantView = ({view, send, participantId}: ScreenProps<Palindr
 									{penaltyMs > 0 && ` (ペナルティ ${formatPenalty(penaltyMs)})`}
 									{myRank !== null && `、現在 ${myRank} 位`}
 								</div>
-								<div className={styles.correctSubDetails}>経過時間: {formatTime(elapsedMs)}</div>
+								<div className={styles.correctSubDetails}>
+									経過時間: {formatTime(resolvedElapsedMs)}
+								</div>
 							</div>
 						)}
 
@@ -251,17 +292,27 @@ export const ParticipantView = ({view, send, participantId}: ScreenProps<Palindr
 							<form className={styles.answerForm} onSubmit={handleSubmit}>
 								<div className={styles.inputGroup}>
 									<input
+										ref={inputRef}
 										type="text"
 										className={styles.answerInput}
 										value={inputText}
 										onChange={(e) => setInputText(e.target.value)}
-										onCompositionStart={() => setIsComposing(true)}
-										onCompositionEnd={() => setIsComposing(false)}
+										onCompositionStart={() => {
+											isComposingRef.current = true;
+										}}
+										onCompositionEnd={() => {
+											isComposingRef.current = false;
+											justEndedCompositionRef.current = true;
+											setTimeout(() => {
+												justEndedCompositionRef.current = false;
+											}, 60);
+										}}
 										onKeyDown={(e) => {
 											if (
 												e.key === 'Enter' &&
-												!isComposing &&
+												!isComposingRef.current &&
 												!e.nativeEvent.isComposing &&
+												!justEndedCompositionRef.current &&
 												canSubmit
 											) {
 												e.preventDefault();
@@ -269,6 +320,7 @@ export const ParticipantView = ({view, send, participantId}: ScreenProps<Palindr
 											}
 										}}
 										placeholder="ひらがなで入力"
+										enterKeyHint="send"
 										autoCapitalize="none"
 										autoComplete="off"
 										autoCorrect="off"
