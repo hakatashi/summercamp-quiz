@@ -1,601 +1,456 @@
 import {describe, expect, it} from 'vitest';
-import {applyCommand, createGame, projectGame} from '../../engine.ts';
-import type {CommandContext, Game, Question} from '../../types.ts';
-import {generateCharTypes, getCharTypesHint} from './charTypes.ts';
-import {palindrome} from './index.ts';
-import {
-	computeOverallStandings,
-	computeQuestionPenalty,
-	computeQuestionStandings,
-} from './scoring.ts';
-import type {
-	PalindromeCommand,
-	PalindromeQuestionExtra,
-	PalindromeQuestionRecord,
-	PalindromeState,
-} from './types.ts';
-import {
-	checkAnswer,
-	getAnswerValidationError,
-	isPalindromeRelaxed,
-	normalizeAnswerText,
-	toRelaxedHiragana,
-} from './validation.ts';
+import {applyCommand, createGame, describeCommand, projectGame} from '../../engine.ts';
+import type {Actor, Game, Question, Viewer} from '../../types.ts';
+import {isAccepting, palindrome} from './index.ts';
+import {computeQuestionSummary, computeStandings, questionLabel} from './scoring.ts';
+import type {PalindromeQuestionExtra, PalindromeState} from './types.ts';
 
-const createTestGame = (questions: Question[] = []): Game<PalindromeState> => {
+const MIN = 60_000;
+
+const question = (
+	id: string,
+	answer: string,
+	notation: string,
+	altAnswers: string[] = [],
+): Question => ({
+	id,
+	text: '',
+	answer,
+	note: '司会用メモ',
+	extra: {
+		image: `media-${id}`,
+		notation,
+		altAnswers,
+		hints: {situation: `${id} の状況`, irasutoya: `${id} の素材`},
+	} satisfies PalindromeQuestionExtra,
+});
+
+const sampleQuestions: Question[] = [
+	question('q1', 'まくらからくま', '枕から熊', ['まくらがらくま']),
+	question('q2', 'とまと', 'トマト'),
+	question('q3', 'たいいた', '鯛板'),
+];
+
+const createTestGame = (questions: Question[] = sampleQuestions): Game<PalindromeState> => {
 	const game = createGame({
 		id: 'game-1',
 		mode: 'palindrome',
 		title: '回文クイズ',
-		createdAt: 1000,
+		createdAt: 0,
 	}) as Game<PalindromeState>;
-	game.questions = questions;
+	game.questions = structuredClone(questions);
 	game.participants = [
-		{id: 'p1', name: '参加者1', joinedAt: 1000, kind: 'human'},
-		{id: 'p2', name: '参加者2', joinedAt: 1000, kind: 'human'},
-		{id: 'p3', name: 'AI参加者', joinedAt: 1000, kind: 'ai'},
+		{id: 'p1', name: '参加者1', joinedAt: 0, kind: 'human'},
+		{id: 'p2', name: '参加者2', joinedAt: 0, kind: 'human'},
+		{id: 'p3', name: 'AI', joinedAt: 0, kind: 'ai'},
 	];
 	return game;
 };
 
-const sampleQuestions: Question[] = [
-	{
-		id: 'q1',
-		text: '',
-		answer: 'まくらからくま',
-		note: '司会用メモ',
-		extra: {
-			image: 'media-1',
-			notation: '枕から熊',
-			altAnswers: ['まくらからくまー'],
-			hints: {
-				situation: '動物がある寝具から出てきているようです。',
-				irasutoya: '「枕のイラスト」、「熊のキャラクター」が使われています。',
-				charTypes: '漢ああ漢',
-			},
-		} satisfies PalindromeQuestionExtra,
-	},
-	{
-		id: 'q2',
-		text: '',
-		answer: 'とまと',
-		note: '',
-		extra: {
-			image: 'media-2',
-			notation: 'トマト',
-			altAnswers: [],
-			hints: {
-				situation: '赤い野菜です。',
-				irasutoya: '「トマトのイラスト」です。',
-			},
-		} satisfies PalindromeQuestionExtra,
-	},
-];
+const host: Actor = {role: 'host'};
+const p = (participantId: string): Actor => ({role: 'participant', participantId});
 
-describe('palindrome mode - validation', () => {
-	it('normalizeAnswerText は空白をすべて除去する', () => {
-		expect(normalizeAnswerText(' まくら　から くま ')).toBe('まくらからくま');
+const run = (game: Game<PalindromeState>, command: unknown, now: number, actor: Actor = host) =>
+	applyCommand(game, command, {now, actor}) as Game<PalindromeState>;
+
+/** 10 分のコンテストを時刻 1000 に始めたゲーム */
+const startedGame = () => {
+	let game = createTestGame();
+	game = run(game, {type: 'setDuration', minutes: 10}, 0);
+	return run(game, {type: 'start'}, 1000);
+};
+
+const project = (game: Game<PalindromeState>, viewer: Viewer) =>
+	projectGame(game, viewer) as Game<PalindromeState>;
+
+describe('palindrome - コンテストの進行', () => {
+	it('初期状態は開始前で、既定の制限時間は 30 分', () => {
+		const {state} = createTestGame();
+		expect(state.phase).toBe('waiting');
+		expect(state.durationMs).toBe(30 * MIN);
+		expect(state.questionIds).toEqual([]);
 	});
 
-	it('toRelaxedHiragana は小書き文字、濁点、半濁点を正規化する', () => {
-		// 小書き文字
-		expect(toRelaxedHiragana('ゃ')).toBe('や');
-		expect(toRelaxedHiragana('っ')).toBe('つ');
-		expect(toRelaxedHiragana('ぁ')).toBe('あ');
-		// 濁点
-		expect(toRelaxedHiragana('が')).toBe('か');
-		expect(toRelaxedHiragana('ざ')).toBe('さ');
-		expect(toRelaxedHiragana('だ')).toBe('た');
-		expect(toRelaxedHiragana('ば')).toBe('は');
-		expect(toRelaxedHiragana('づ')).toBe('つ');
-		expect(toRelaxedHiragana('ぢ')).toBe('ち');
-		expect(toRelaxedHiragana('ゔ')).toBe('う');
-		// 半濁点
-		expect(toRelaxedHiragana('ぱ')).toBe('は');
-		expect(toRelaxedHiragana('ぴ')).toBe('ひ');
-		// 通常文字・長音
-		expect(toRelaxedHiragana('あ')).toBe('あ');
-		expect(toRelaxedHiragana('ー')).toBe('ー');
+	it('start で開始時刻・終了予定時刻・問題の並びを確定する', () => {
+		const {state} = startedGame();
+		expect(state.phase).toBe('running');
+		expect(state.startedAt).toBe(1000);
+		expect(state.endsAt).toBe(1000 + 10 * MIN);
+		expect(state.questionIds).toEqual(['q1', 'q2', 'q3']);
 	});
 
-	it('isPalindromeRelaxed は緩和条件で回文を判定する', () => {
-		// 完全一致の回文 (奇数・偶数文字)
-		expect(isPalindromeRelaxed('とまと')).toBe(true); // 3文字 (奇数)
-		expect(isPalindromeRelaxed('たいいた')).toBe(true); // 4文字 (偶数)
-		expect(isPalindromeRelaxed('まくらからくま')).toBe(true); // 7文字 (奇数)
-
-		// 小書き文字の同一視 (き・ゃ・つ・や・き)
-		expect(isPalindromeRelaxed('きやつやき')).toBe(true);
-		// 濁点の同一視 (あさひざあ → あさひさあ)
-		expect(isPalindromeRelaxed('あさひざあ')).toBe(true);
-		// 半濁点の同一視 (ぱんつつんは → はんつつんは)
-		expect(isPalindromeRelaxed('ぱんつつんは')).toBe(true);
-
-		// 長音「ー」は省略とみなせない
-		expect(isPalindromeRelaxed('びーるるーひ')).toBe(true); // 対称に「ー」がある
-		expect(isPalindromeRelaxed('びーるるひ')).toBe(false); // 長音の省略は不可
-
-		// 回文でない
-		expect(isPalindromeRelaxed('あいうえお')).toBe(false);
-		expect(isPalindromeRelaxed('しるしる')).toBe(false);
+	it('問題がなければ開始できず、開始後は制限時間の変更も再開始もできない', () => {
+		expect(() => run(createTestGame([]), {type: 'start'}, 0)).toThrow('問題がありません');
+		const game = startedGame();
+		expect(() => run(game, {type: 'setDuration', minutes: 5}, 2000)).toThrow();
+		expect(() => run(game, {type: 'start'}, 2000)).toThrow('すでに始まっています');
 	});
 
-	it('getAnswerValidationError は要件通りのメッセージを返す', () => {
-		const answer = 'まくらからくま'; // 7文字
+	it('参加者は開始・延長・終了を実行できない', () => {
+		expect(() => run(createTestGame(), {type: 'start'}, 0, p('p1'))).toThrow('権限');
+	});
 
-		// 空文字・ひらがな以外
-		expect(getAnswerValidationError('', {answer})).toBe('ひらがなで入力してください');
-		expect(getAnswerValidationError('枕から熊', {answer})).toBe('ひらがなで入力してください');
-		expect(getAnswerValidationError('マクラからクマ', {answer})).toBe('ひらがなで入力してください');
-		expect(getAnswerValidationError('makurakarakuma', {answer})).toBe('ひらがなで入力してください');
-
-		// 文字数違い (短い・長い)
-		expect(getAnswerValidationError('まくらくま', {answer})).toBe(
-			'7 文字で入力してください (現在 5 文字)',
+	it('開始前の回答とヒントは拒否する', () => {
+		const game = createTestGame();
+		expect(() => run(game, {type: 'answer', questionId: 'q2', text: 'とまと'}, 0, p('p1'))).toThrow(
+			'まだ始まっていません',
 		);
-		expect(getAnswerValidationError('まくらからからくま', {answer})).toBe(
-			'7 文字で入力してください (現在 9 文字)',
-		);
-
-		// 回文でない
-		expect(getAnswerValidationError('あいうえおかき', {answer})).toBe('回文になっていません');
-
-		// すでに送った誤答
-		expect(
-			getAnswerValidationError('たいこいこいた', {
-				answer,
-				wrongAnswers: ['たいこいこいた'],
-			}),
-		).toBe('その回答はすでに送っています');
-
-		// バリデーション通過
-		expect(getAnswerValidationError('まくらからくま', {answer})).toBeNull();
-		expect(getAnswerValidationError('たいこいこいた', {answer})).toBeNull();
+		expect(() =>
+			run(game, {type: 'openHint', questionId: 'q2', kind: 'situation'}, 0, p('p1')),
+		).toThrow('まだ始まっていません');
 	});
 
-	it('checkAnswer は想定解および別解との完全一致で正誤判定を行う', () => {
-		const options = {
-			answer: 'まくらからくま',
-			altAnswers: ['まくらはらくま'],
-		};
-
-		// 想定解
-		expect(checkAnswer(' まくらからくま ', options)).toEqual({
-			correct: true,
-			normalized: 'まくらからくま',
-		});
-
-		// 別解
-		expect(
-			checkAnswer('まくらはらくま', {
-				answer: 'まくらからくま',
-				altAnswers: ['まくらはらくま'],
-			}),
-		).toEqual({
-			correct: true,
-			normalized: 'まくらはらくま',
-		});
-
-		// 回文だが正解ではない誤答
-		expect(checkAnswer('たいこいこいた', options)).toEqual({
-			correct: false,
-			normalized: 'たいこいこいた',
-		});
-
-		// バリデーションエラー時は CommandError を投げる
-		expect(() => checkAnswer('まくら', options)).toThrowError(
-			'7 文字で入力してください (現在 3 文字)',
-		);
-		expect(() => checkAnswer('枕から熊', options)).toThrowError('ひらがなで入力してください');
-	});
-});
-
-describe('palindrome mode - charTypes', () => {
-	it('generateCharTypes は自然表記から文字種文字列を正しく生成する', () => {
-		expect(generateCharTypes('枕から熊')).toBe('漢ああ漢');
-		expect(generateCharTypes('トマト')).toBe('アアア');
-		expect(generateCharTypes('しんぶんし')).toBe('あああああ');
-		expect(generateCharTypes('UFO')).toBe('AAA');
-		expect(generateCharTypes('ラーメン')).toBe('アアアア');
-		expect(generateCharTypes('スキー場')).toBe('アアア漢');
-		expect(generateCharTypes('すーぱー')).toBe('ああああ');
+	it('終了予定時刻を過ぎた回答とヒントは finish の前でも拒否する', () => {
+		const game = startedGame();
+		const endsAt = 1000 + 10 * MIN;
+		expect(isAccepting(game.state, endsAt - 1)).toBe(true);
+		expect(isAccepting(game.state, endsAt)).toBe(false);
+		run(game, {type: 'answer', questionId: 'q2', text: 'とまと'}, endsAt - 1, p('p1'));
+		expect(() =>
+			run(game, {type: 'answer', questionId: 'q2', text: 'とまと'}, endsAt, p('p1')),
+		).toThrow('終了しました');
+		expect(() =>
+			run(game, {type: 'openHint', questionId: 'q2', kind: 'situation'}, endsAt, p('p1')),
+		).toThrow('終了しました');
 	});
 
-	it('getCharTypesHint は手動指定を優先する', () => {
-		expect(getCharTypesHint('枕から熊', '漢ああ漢')).toBe('漢ああ漢');
-		expect(getCharTypesHint('トマト', undefined)).toBe('アアア');
-		expect(getCharTypesHint('トマト', '')).toBe('アアア');
-	});
-});
-
-describe('palindrome mode - scoring', () => {
-	const participants = [
-		{id: 'p1', name: '参加者1', joinedAt: 1000, kind: 'human' as const},
-		{id: 'p2', name: '参加者2', joinedAt: 1000, kind: 'human' as const},
-		{id: 'p3', name: '参加者3', joinedAt: 1000, kind: 'human' as const},
-		{id: 'p4', name: '参加者4', joinedAt: 1000, kind: 'human' as const},
-	];
-
-	it('computeQuestionPenalty はヒントに応じたペナルティ時間を返す', () => {
-		expect(computeQuestionPenalty({})).toBe(0);
-		expect(computeQuestionPenalty({situation: 2000})).toBe(50_000);
-		expect(computeQuestionPenalty({situation: 2000, irasutoya: 3000})).toBe(90_000);
-		expect(computeQuestionPenalty({situation: 2000, irasutoya: 3000, charTypes: 4000})).toBe(
-			110_000,
-		);
+	it('extend で終了予定時刻を延ばすと、延ばした分だけ受け付ける', () => {
+		let game = startedGame();
+		const endsAt = 1000 + 10 * MIN;
+		game = run(game, {type: 'extend', minutes: 5}, 2000);
+		expect(game.state.endsAt).toBe(endsAt + 5 * MIN);
+		game = run(game, {type: 'answer', questionId: 'q2', text: 'とまと'}, endsAt + MIN, p('p1'));
+		expect(game.state.attempts.q2?.p1?.correctAt).toBe(endsAt + MIN);
+		// 時間切れの後は延長できない
+		expect(() => run(game, {type: 'extend', minutes: 1}, endsAt + 5 * MIN)).toThrow();
 	});
 
-	it('computeQuestionStandings は記録時間の短い順、同時間なら誤答の少ない順に並べる', () => {
-		const record: PalindromeQuestionRecord = {
-			questionId: 'q1',
-			openedAt: 10_000,
-			closedAt: 70_000,
-			participants: {
-				// p1: 経過時間 30秒, ヒントなし (0秒) -> 記録 30秒, 誤答1回
-				p1: {hints: {}, wrong: [{text: 'たいこからこいた', at: 20_000}], correctAt: 40_000},
-				// p2: 経過時間 10秒, situation (50秒) -> 記録 60秒, 誤答0回
-				p2: {hints: {situation: 15_000}, wrong: [], correctAt: 20_000},
-				// p3: 経過時間 30秒, ヒントなし (0秒) -> 記録 30秒, 誤答0回 (p1より上位！)
-				p3: {hints: {}, wrong: [], correctAt: 40_000},
-				// p4: 未正解
-				p4: {hints: {}, wrong: [{text: 'あさひさあ', at: 30_000}], correctAt: null},
-			},
-		};
-
-		const standings = computeQuestionStandings(record, participants);
-		// 1位: p3 (記録30秒, 誤答0)
-		expect(standings[0]?.participantId).toBe('p3');
-		expect(standings[0]?.rank).toBe(1);
-		expect(standings[0]?.recordTimeMs).toBe(30_000);
-
-		// 2位: p1 (記録30秒, 誤答1)
-		expect(standings[1]?.participantId).toBe('p1');
-		expect(standings[1]?.rank).toBe(2);
-		expect(standings[1]?.recordTimeMs).toBe(30_000);
-
-		// 3位: p2 (記録60秒, 誤答0)
-		expect(standings[2]?.participantId).toBe('p2');
-		expect(standings[2]?.rank).toBe(3);
-		expect(standings[2]?.recordTimeMs).toBe(60_000);
-
-		// 4位: p4 (未正解)
-		expect(standings[3]?.participantId).toBe('p4');
-		expect(standings[3]?.rank).toBe(4);
-		expect(standings[3]?.correct).toBe(false);
-	});
-
-	it('computeOverallStandings は正解数 > 記録時間合計 > 誤答数合計 の順に並べる', () => {
-		const history: PalindromeQuestionRecord[] = [
-			{
-				questionId: 'q1',
-				openedAt: 10_000,
-				closedAt: 60_000,
-				participants: {
-					p1: {hints: {}, wrong: [], correctAt: 20_000}, // 10秒
-					p2: {hints: {}, wrong: [{text: 'a', at: 15_000}], correctAt: 25_000}, // 15秒, 誤答1
-					p3: {hints: {}, wrong: [], correctAt: null},
-				},
-			},
-			{
-				questionId: 'q2',
-				openedAt: 70_000,
-				closedAt: 120_000,
-				participants: {
-					p1: {hints: {charTypes: 75_000}, wrong: [], correctAt: 80_000}, // 10秒 + 20秒 = 30秒
-					p2: {hints: {}, wrong: [], correctAt: 80_000}, // 10秒
-					p3: {hints: {}, wrong: [], correctAt: 80_000}, // 10秒
-				},
-			},
-		];
-
-		const standings = computeOverallStandings(history, participants.slice(0, 3));
-		// p2: 正解2問, 記録時間 15 + 10 = 25秒, 誤答1
-		// p1: 正解2問, 記録時間 10 + 30 = 40秒, 誤答0
-		// p3: 正解1問
-		expect(standings[0]?.participantId).toBe('p2');
-		expect(standings[0]?.rank).toBe(1);
-		expect(standings[0]?.correctCount).toBe(2);
-		expect(standings[0]?.totalRecordTimeMs).toBe(25_000);
-
-		expect(standings[1]?.participantId).toBe('p1');
-		expect(standings[1]?.rank).toBe(2);
-		expect(standings[1]?.correctCount).toBe(2);
-		expect(standings[1]?.totalRecordTimeMs).toBe(40_000);
-
-		expect(standings[2]?.participantId).toBe('p3');
-		expect(standings[2]?.rank).toBe(3);
-		expect(standings[2]?.correctCount).toBe(1);
-	});
-});
-
-describe('palindrome mode - commands and state machine', () => {
-	const hostCtx: CommandContext = {actor: {role: 'host'}, now: 10_000};
-	const p1Ctx: CommandContext = {
-		actor: {role: 'participant', participantId: 'p1'},
-		now: 20_000,
-	};
-	const systemCtx: CommandContext = {actor: {role: 'system'}, now: 30_000};
-
-	const run = (
-		game: Game<PalindromeState>,
-		command: PalindromeCommand,
-		ctx: CommandContext,
-	): Game<PalindromeState> => applyCommand(game, command, ctx) as Game<PalindromeState>;
-
-	it('next -> close -> finish の基本進行', () => {
-		let game = createTestGame(sampleQuestions);
-		expect(game.state.phase).toBe('waiting');
-
-		// 1問目出題
-		game = run(game, {type: 'next'} satisfies PalindromeCommand, hostCtx);
-		expect(game.state.phase).toBe('open');
-		expect(game.state.history.length).toBe(1);
-		expect(game.state.history[0]?.questionId).toBe('q1');
-		expect(game.state.history[0]?.openedAt).toBe(10_000);
-		expect(game.state.history[0]?.closedAt).toBeNull();
-
-		// 問題終了
-		game = run(game, {type: 'close'} satisfies PalindromeCommand, {
-			...hostCtx,
-			now: 50_000,
-		});
-		expect(game.state.phase).toBe('closed');
-		expect(game.state.history[0]?.closedAt).toBe(50_000);
-
-		// 出題中でない close はエラー
-		expect(() => run(game, {type: 'close'} satisfies PalindromeCommand, hostCtx)).toThrow(
-			'出題中の問題がありません',
-		);
-
-		// 2問目出題
-		game = run(game, {type: 'next'} satisfies PalindromeCommand, {
-			...hostCtx,
-			now: 60_000,
-		});
-		expect(game.state.phase).toBe('open');
-		expect(game.state.history.length).toBe(2);
-		expect(game.state.history[1]?.questionId).toBe('q2');
-
-		// 出題中に next を呼ぶと直前の問題がクローズされて次へ
-		// (残り問題がないので finished へ)
-		game = run(game, {type: 'next'} satisfies PalindromeCommand, {
-			...hostCtx,
-			now: 90_000,
-		});
+	it('finish で途中で打ち切ると、それ以降は受け付けない', () => {
+		let game = startedGame();
+		game = run(game, {type: 'finish'}, 5000);
 		expect(game.state.phase).toBe('finished');
-		expect(game.state.history[1]?.closedAt).toBe(90_000);
-	});
-
-	it('openHint コマンドでヒントを開ける (重複開封は no-op、正解後はエラー)', () => {
-		let game = createTestGame(sampleQuestions);
-		game = run(game, {type: 'next'} satisfies PalindromeCommand, hostCtx);
-
-		// p1 が situation ヒントを開ける
-		game = run(game, {type: 'openHint', kind: 'situation'} satisfies PalindromeCommand, p1Ctx);
-		const cur = game.state.history[0];
-		expect(cur?.participants.p1?.hints.situation).toBe(20_000);
-
-		// 同じヒントをもう一度開けても時刻は更新されずエラーにもならない
-		game = run(game, {type: 'openHint', kind: 'situation'} satisfies PalindromeCommand, {
-			...p1Ctx,
-			now: 25_000,
-		});
-		expect(game.state.history[0]?.participants.p1?.hints.situation).toBe(20_000);
-
-		// AI (system) が p3 の代理でヒントを開ける
-		game = run(
-			game,
-			{type: 'openHint', kind: 'charTypes', participantId: 'p3'} satisfies PalindromeCommand,
-			systemCtx,
-		);
-		expect(game.state.history[0]?.participants.p3?.hints.charTypes).toBe(30_000);
-	});
-
-	it('answer コマンドで正解・誤答・バリデーション拒否', () => {
-		let game = createTestGame(sampleQuestions);
-		game = run(game, {type: 'next'} satisfies PalindromeCommand, hostCtx);
-
-		// バリデーションエラーの回答 (文字数違い) -> CommandError で拒否され、誤答に記録されない
+		expect(game.state.finishedAt).toBe(5000);
 		expect(() =>
-			run(game, {type: 'answer', text: 'まくらくま'} satisfies PalindromeCommand, p1Ctx),
-		).toThrow('7 文字で入力してください (現在 5 文字)');
-		expect(game.state.history[0]?.participants.p1?.wrong.length).toBe(0);
-
-		// 回文だが不正解の誤答 (7文字)
-		game = run(game, {type: 'answer', text: 'たいこいこいた'} satisfies PalindromeCommand, p1Ctx);
-		expect(game.state.history[0]?.participants.p1?.wrong).toEqual([
-			{text: 'たいこいこいた', at: 20_000},
-		]);
-		expect(game.state.history[0]?.participants.p1?.correctAt).toBeNull();
-
-		// 同じ誤答を再度送る -> CommandError
-		expect(() =>
-			run(game, {type: 'answer', text: 'たいこいこいた'} satisfies PalindromeCommand, {
-				...p1Ctx,
-				now: 22_000,
-			}),
-		).toThrow('その回答はすでに送っています');
-
-		// 正解の回答
-		game = run(game, {type: 'answer', text: 'まくらからくま'} satisfies PalindromeCommand, {
-			...p1Ctx,
-			now: 25_000,
-		});
-		expect(game.state.history[0]?.participants.p1?.correctAt).toBe(25_000);
-
-		// 正解後に再度回答するとエラー
-		expect(() =>
-			run(game, {type: 'answer', text: 'まくらからくま'} satisfies PalindromeCommand, {
-				...p1Ctx,
-				now: 26_000,
-			}),
-		).toThrow('既に正解しています');
-
-		// 正解後にヒントを開けようとするとエラー
-		expect(() =>
-			run(game, {type: 'openHint', kind: 'charTypes'} satisfies PalindromeCommand, {
-				...p1Ctx,
-				now: 27_000,
-			}),
-		).toThrow('既に正解しています');
+			run(game, {type: 'answer', questionId: 'q2', text: 'とまと'}, 6000, p('p1')),
+		).toThrow('終了しました');
+		expect(() => run(game, {type: 'finish'}, 7000)).toThrow();
 	});
 
-	it('showStandings コマンドでフラグを切り替える', () => {
-		let game = createTestGame(sampleQuestions);
-		expect(game.state.showStandings).toBe(false);
-
-		game = run(game, {type: 'showStandings', show: true} satisfies PalindromeCommand, hostCtx);
-		expect(game.state.showStandings).toBe(true);
-
-		game = run(game, {type: 'showStandings', show: false} satisfies PalindromeCommand, hostCtx);
-		expect(game.state.showStandings).toBe(false);
-	});
-});
-
-describe('palindrome mode - projection (情報秘匿)', () => {
-	const run = (
-		game: Game<PalindromeState>,
-		command: PalindromeCommand,
-		ctx: CommandContext,
-	): Game<PalindromeState> => applyCommand(game, command, ctx) as Game<PalindromeState>;
-	const project = (
-		game: Game<PalindromeState>,
-		viewer: Parameters<typeof projectGame>[1],
-	): Game<PalindromeState> => projectGame(game, viewer) as Game<PalindromeState>;
-
-	it('出題中・終了後で参加者・モニターへの投影が正しく絞られる', () => {
-		let game = createTestGame(sampleQuestions);
-		// 1問目出題
-		game = run(game, {type: 'next'} satisfies PalindromeCommand, {
-			actor: {role: 'host'},
-			now: 10_000,
-		});
-
-		// p1 が situation ヒントを開け、誤答1回 (7文字)
-		game = run(game, {type: 'openHint', kind: 'situation'} satisfies PalindromeCommand, {
-			actor: {role: 'participant', participantId: 'p1'},
-			now: 15_000,
-		});
-		game = run(game, {type: 'answer', text: 'たいこいこいた'} satisfies PalindromeCommand, {
-			actor: {role: 'participant', participantId: 'p1'},
-			now: 20_000,
-		});
-
-		// p2 は誤答1回 (ヒント開けず, 7文字)
-		game = run(game, {type: 'answer', text: 'あさひさひさあ'} satisfies PalindromeCommand, {
-			actor: {role: 'participant', participantId: 'p2'},
-			now: 22_000,
-		});
-
-		// --- 出題中の投影確認 ---
-
-		// 1. 司会者 (host): すべての情報が見える
-		const hostView = project(game, {role: 'host'});
-		expect(hostView.questions.length).toBe(2);
-		const hostQ0 = hostView.questions[0];
-		expect(hostQ0?.answer).toBe('まくらからくま');
-		expect(hostQ0?.note).toBe('司会用メモ');
-		const hostExtra = hostQ0?.extra as PalindromeQuestionExtra | undefined;
-		expect(hostExtra?.notation).toBe('枕から熊');
-		expect(hostView.state.history[0]?.participants.p1?.wrong[0]?.text).toBe('たいこいこいた');
-
-		// 2. モニター (monitor): 未出題は非表示、出題中の答え・ヒント本文・回答本文は隠される
-		const monitorView = project(game, {role: 'monitor'});
-		expect(monitorView.questions.length).toBe(1); // q2は未出題なので除外
-		const monitorQ0 = monitorView.questions[0];
-		expect(monitorQ0?.answer).toBe(''); // 答えは隠される
-		expect(monitorQ0?.note).toBe('');
-		const monitorExtra = monitorQ0?.extra as
-			| {charCount?: number; notation?: string; hints?: Record<string, string>}
-			| undefined;
-		expect(monitorExtra?.charCount).toBe(7); // 文字数は見える
-		expect(monitorExtra?.notation).toBeUndefined();
-		expect(monitorExtra?.hints).toEqual({}); // ヒント本文なし
-		// 回答本文は空文字列に伏せられる
-		expect(monitorView.state.history[0]?.participants.p1?.wrong[0]?.text).toBe('');
-		expect(monitorView.state.history[0]?.participants.p2?.wrong[0]?.text).toBe('');
-
-		// 3. 参加者 p1 (participant):
-		const p1View = project(game, {role: 'participant', participantId: 'p1'});
-		expect(p1View.questions.length).toBe(1);
-		const p1Q0 = p1View.questions[0];
-		expect(p1Q0?.answer).toBe('');
-		const p1Extra = p1Q0?.extra as {charCount?: number; hints?: Record<string, string>} | undefined;
-		expect(p1Extra?.charCount).toBe(7);
-		// 自分が開けた situation ヒントの本文だけが含まれ、開けていない irasutoya や charTypes は含まれない
-		const p1Hints = p1Extra?.hints;
-		expect(p1Hints?.situation).toBe('動物がある寝具から出てきているようです。');
-		expect(p1Hints?.irasutoya).toBeUndefined();
-		expect(p1Hints?.charTypes).toBeUndefined();
-		// 自分の誤答本文は見え、他人の誤答本文は伏せられる
-		expect(p1View.state.history[0]?.participants.p1?.wrong[0]?.text).toBe('たいこいこいた');
-		expect(p1View.state.history[0]?.participants.p2?.wrong[0]?.text).toBe('');
-
-		// --- 問題終了後の投影確認 ---
-		game = run(game, {type: 'close'} satisfies PalindromeCommand, {
-			actor: {role: 'host'},
-			now: 50_000,
-		});
-
-		const closedMonitorView = project(game, {role: 'monitor'});
-		const closedQ0 = closedMonitorView.questions[0];
-		expect(closedQ0?.answer).toBe('まくらからくま'); // 答え解禁
-		const closedExtra = closedQ0?.extra as
-			| {notation?: string; hints?: Record<string, string>}
-			| undefined;
-		expect(closedExtra?.notation).toBe('枕から熊');
-		expect(closedExtra?.hints?.situation).toBe('動物がある寝具から出てきているようです。');
-		expect(closedExtra?.hints?.charTypes).toBe('漢ああ漢');
+	it('時間切れの後の finish では、終了時刻は終了予定時刻になる', () => {
+		const game = run(startedGame(), {type: 'finish'}, 1000 + 20 * MIN);
+		expect(game.state.finishedAt).toBe(1000 + 10 * MIN);
 	});
 
-	it('describeCommand がコマンドの説明文を正しく生成する', () => {
-		const game = createTestGame(sampleQuestions);
-		const {describe: describeFn} = palindrome;
-
-		expect(describeFn({type: 'next'}, game)).toBe('次の問題へ');
-		expect(describeFn({type: 'close'}, game)).toBe('問題を終了');
-		expect(describeFn({type: 'finish'}, game)).toBe('企画を終了');
-		expect(describeFn({type: 'showStandings', show: true}, game)).toBe('総合順位を表示');
-		expect(describeFn({type: 'showStandings', show: false}, game)).toBe('総合順位を非表示');
-		expect(describeFn({type: 'openHint', kind: 'situation', participantId: 'p1'}, game)).toBe(
-			'参加者1さんが状況説明ヒントを開けた',
-		);
-		expect(describeFn({type: 'openHint', kind: 'irasutoya', participantId: 'p2'}, game)).toBe(
-			'参加者2さんがいらすとやヒントを開けた',
-		);
-		expect(describeFn({type: 'openHint', kind: 'charTypes', participantId: 'p3'}, game)).toBe(
-			'AI参加者さんが文字種ヒントを開けた',
-		);
-		expect(describeFn({type: 'answer', text: 'まくらからくま', participantId: 'p1'}, game)).toBe(
-			'参加者1さんの回答',
-		);
-	});
-
-	it('system actor (AI) による answer コマンドが動作する', () => {
-		let game = createTestGame(sampleQuestions);
-		game = run(game, {type: 'next'} satisfies PalindromeCommand, {
-			actor: {role: 'host'},
-			now: 10_000,
-		});
-
-		// participantId なしの system answer はエラー
-		expect(() =>
-			run(game, {type: 'answer', text: 'まくらからくま'} satisfies PalindromeCommand, {
-				actor: {role: 'system'},
-				now: 20_000,
-			}),
-		).toThrow('participantId が指定されていません');
-
-		// participantId ありの system answer
+	it('開始後に追加した問題はコンテストに含まれず、回答できない', () => {
+		let game = startedGame();
 		game = run(
 			game,
 			{
-				type: 'answer',
-				text: 'まくらからくま',
-				participantId: 'p3',
-			} satisfies PalindromeCommand,
-			{actor: {role: 'system'}, now: 20_000},
+				type: 'questions.add',
+				question: {...question('q4', 'しんぶんし', '新聞紙')},
+			},
+			2000,
 		);
-		expect(game.state.history[0]?.participants.p3?.correctAt).toBe(20_000);
+		expect(() =>
+			run(game, {type: 'answer', questionId: 'q4', text: 'しんぶんし'}, 3000, p('p1')),
+		).toThrow('問題が見つかりません');
+	});
+});
+
+describe('palindrome - 回答とヒント', () => {
+	it('好きな問題に回答でき、正解・誤答を記録する (別解も正解)', () => {
+		let game = startedGame();
+		game = run(game, {type: 'answer', questionId: 'q3', text: 'かいいか'}, 2000, p('p1'));
+		game = run(game, {type: 'answer', questionId: 'q3', text: 'たいいた'}, 3000, p('p1'));
+		game = run(game, {type: 'answer', questionId: 'q1', text: 'まくらがらくま'}, 4000, p('p2'));
+		expect(game.state.attempts.q3?.p1).toEqual({
+			hints: {},
+			wrong: [{text: 'かいいか', at: 2000}],
+			correctAt: 3000,
+		});
+		expect(game.state.attempts.q1?.p2?.correctAt).toBe(4000);
+	});
+
+	it('検証エラーの回答は拒否し、誤答に数えない', () => {
+		let game = startedGame();
+		expect(() =>
+			run(game, {type: 'answer', questionId: 'q2', text: 'トマト'}, 2000, p('p1')),
+		).toThrow('ひらがな');
+		expect(() =>
+			run(game, {type: 'answer', questionId: 'q2', text: 'とまとと'}, 2000, p('p1')),
+		).toThrow('3 文字');
+		game = run(game, {type: 'answer', questionId: 'q2', text: 'たまた'}, 2000, p('p1'));
+		expect(() =>
+			run(game, {type: 'answer', questionId: 'q2', text: 'たまた'}, 3000, p('p1')),
+		).toThrow('すでに送っています');
+		expect(game.state.attempts.q2?.p1?.wrong).toHaveLength(1);
+	});
+
+	it('正解した問題には回答もヒントもできない', () => {
+		const game = run(
+			startedGame(),
+			{type: 'answer', questionId: 'q2', text: 'とまと'},
+			2000,
+			p('p1'),
+		);
+		expect(() =>
+			run(game, {type: 'answer', questionId: 'q2', text: 'とまと'}, 3000, p('p1')),
+		).toThrow('既に正解しています');
+		expect(() =>
+			run(game, {type: 'openHint', questionId: 'q2', kind: 'charTypes'}, 3000, p('p1')),
+		).toThrow('既に正解しています');
+	});
+
+	it('ヒントは問題ごと・参加者ごとに開き、2回目は何もしない', () => {
+		let game = startedGame();
+		game = run(game, {type: 'openHint', questionId: 'q1', kind: 'charTypes'}, 2000, p('p1'));
+		game = run(game, {type: 'openHint', questionId: 'q1', kind: 'charTypes'}, 3000, p('p1'));
+		expect(game.state.attempts.q1?.p1?.hints).toEqual({charTypes: 2000});
+		expect(game.state.attempts.q2?.p1).toBeUndefined();
+		expect(game.state.attempts.q1?.p2).toBeUndefined();
+	});
+
+	it('system (AI の代理) は participantId を指定して回答できる', () => {
+		let game = startedGame();
+		const system: Actor = {role: 'system'};
+		game = run(
+			game,
+			{type: 'openHint', questionId: 'q2', kind: 'situation', participantId: 'p3'},
+			2000,
+			system,
+		);
+		game = run(
+			game,
+			{type: 'answer', questionId: 'q2', text: 'とまと', participantId: 'p3'},
+			3000,
+			system,
+		);
+		expect(game.state.attempts.q2?.p3).toEqual({
+			hints: {situation: 2000},
+			wrong: [],
+			correctAt: 3000,
+		});
+		expect(() =>
+			run(game, {type: 'answer', questionId: 'q1', text: 'まくらからくま'}, 3000, system),
+		).toThrow('participantId');
+		expect(() =>
+			run(
+				game,
+				{type: 'answer', questionId: 'q1', text: 'まくらからくま', participantId: 'nobody'},
+				3000,
+				system,
+			),
+		).toThrow('登録されていません');
+	});
+
+	it('司会者やモニターは回答できない', () => {
+		expect(() =>
+			run(startedGame(), {type: 'answer', questionId: 'q2', text: 'とまと'}, 2000, host),
+		).toThrow('権限');
+	});
+});
+
+describe('palindrome - 順位', () => {
+	const standingsOf = (game: Game<PalindromeState>) =>
+		computeStandings(game.state, game.participants).map((s) => ({
+			id: s.participantId,
+			rank: s.rank,
+			solved: s.solvedCount,
+			time: s.scoreTimeMs,
+			wrong: s.wrongCount,
+		}));
+
+	it('正答数の多い順 → 最終正答時間 + ペナルティの短い順 → 誤答数の少ない順', () => {
+		let game = startedGame();
+		// p1: 2 問正解 (最終 5 分)。ペナルティなし
+		game = run(game, {type: 'answer', questionId: 'q2', text: 'とまと'}, 1000 + MIN, p('p1'));
+		game = run(game, {type: 'answer', questionId: 'q3', text: 'たいいた'}, 1000 + 5 * MIN, p('p1'));
+		// p2: 2 問正解 (最終 4 分) で文字種ヒント 2 つ (+40 秒)
+		game = run(game, {type: 'openHint', questionId: 'q2', kind: 'charTypes'}, 1000, p('p2'));
+		game = run(game, {type: 'openHint', questionId: 'q3', kind: 'charTypes'}, 1000, p('p2'));
+		game = run(game, {type: 'answer', questionId: 'q2', text: 'とまと'}, 1000 + 2 * MIN, p('p2'));
+		game = run(game, {type: 'answer', questionId: 'q3', text: 'たいいた'}, 1000 + 4 * MIN, p('p2'));
+		// p3: 1 問正解
+		game = run(game, {type: 'answer', questionId: 'q2', text: 'とまと'}, 1000 + 30_000, p('p3'));
+
+		expect(standingsOf(game)).toEqual([
+			{id: 'p2', rank: 1, solved: 2, time: 4 * MIN + 40_000, wrong: 0},
+			{id: 'p1', rank: 2, solved: 2, time: 5 * MIN, wrong: 0},
+			{id: 'p3', rank: 3, solved: 1, time: 30_000, wrong: 0},
+		]);
+	});
+
+	it('時間が同じなら誤答数の少ない順。すべて同じなら同順位', () => {
+		let game = startedGame();
+		game = run(game, {type: 'answer', questionId: 'q2', text: 'たまた'}, 1000, p('p1'));
+		game = run(game, {type: 'answer', questionId: 'q2', text: 'とまと'}, 1000 + MIN, p('p1'));
+		game = run(game, {type: 'answer', questionId: 'q2', text: 'とまと'}, 1000 + MIN, p('p2'));
+		game = run(game, {type: 'answer', questionId: 'q2', text: 'とまと'}, 1000 + MIN, p('p3'));
+		expect(standingsOf(game).map((s) => [s.id, s.rank])).toEqual([
+			['p2', 1],
+			['p3', 1],
+			['p1', 3],
+		]);
+	});
+
+	it('未正解の問題で開けたヒントと誤答は順位に影響しない', () => {
+		let game = startedGame();
+		game = run(game, {type: 'answer', questionId: 'q2', text: 'とまと'}, 1000 + MIN, p('p1'));
+		game = run(game, {type: 'answer', questionId: 'q2', text: 'とまと'}, 1000 + MIN, p('p2'));
+		// p2 は q1 でヒントを全部開けて誤答したが、正解していない
+		for (const kind of ['situation', 'irasutoya', 'charTypes']) {
+			game = run(game, {type: 'openHint', questionId: 'q1', kind}, 2000, p('p2'));
+		}
+		game = run(game, {type: 'answer', questionId: 'q1', text: 'たいこいこいた'}, 3000, p('p2'));
+
+		const [first, second] = computeStandings(game.state, game.participants);
+		expect(first?.rank).toBe(1);
+		expect(second?.rank).toBe(1);
+		const p2 = computeStandings(game.state, game.participants).find(
+			(s) => s.participantId === 'p2',
+		);
+		expect(p2?.penaltyMs).toBe(0);
+		expect(p2?.wrongCount).toBe(0);
+		// 表示用のセルには未正解の問題の誤答とヒントも残る
+		expect(p2?.cells.q1).toMatchObject({solved: false, wrongCount: 1, penaltyMs: 110_000});
+	});
+
+	it('セルには開始からの経過時間と最初の正解者の印が付く', () => {
+		let game = startedGame();
+		game = run(game, {type: 'answer', questionId: 'q2', text: 'とまと'}, 1000 + 2 * MIN, p('p1'));
+		game = run(game, {type: 'answer', questionId: 'q2', text: 'とまと'}, 1000 + MIN, p('p2'));
+		const standings = computeStandings(game.state, game.participants);
+		const cell = (id: string) => standings.find((s) => s.participantId === id)?.cells.q2;
+		expect(cell('p1')).toMatchObject({solved: true, elapsedMs: 2 * MIN, firstSolver: false});
+		expect(cell('p2')).toMatchObject({solved: true, elapsedMs: MIN, firstSolver: true});
+		expect(cell('p3')).toMatchObject({solved: false, elapsedMs: null, firstSolver: false});
+	});
+
+	it('削除された参加者は順位に含めない', () => {
+		let game = startedGame();
+		game = run(game, {type: 'answer', questionId: 'q2', text: 'とまと'}, 2000, p('p1'));
+		game = run(game, {type: 'participants.remove', participantId: 'p1'}, 3000);
+		expect(computeStandings(game.state, game.participants).map((s) => s.participantId)).toEqual([
+			'p2',
+			'p3',
+		]);
+	});
+
+	it('computeQuestionSummary は正解順の一覧と最初の正解者を返す', () => {
+		let game = startedGame();
+		game = run(game, {type: 'openHint', questionId: 'q2', kind: 'irasutoya'}, 1000, p('p1'));
+		game = run(game, {type: 'answer', questionId: 'q2', text: 'とまと'}, 1000 + 2 * MIN, p('p1'));
+		game = run(game, {type: 'answer', questionId: 'q2', text: 'とまと'}, 1000 + MIN, p('p2'));
+		game = run(game, {type: 'answer', questionId: 'q2', text: 'たまた'}, 1000, p('p3'));
+		const summary = computeQuestionSummary(game.state, 'q2', game.participants);
+		expect(summary.solvers.map((s) => [s.participantId, s.elapsedMs, s.penaltyMs])).toEqual([
+			['p2', MIN, 0],
+			['p1', 2 * MIN, 40_000],
+		]);
+		expect(summary.firstSolverIds).toEqual(['p2']);
+		expect(summary.unsolvedTriedCount).toBe(1);
+	});
+
+	it('questionLabel は A, B, C… と番号を振る', () => {
+		expect(questionLabel(0)).toBe('A');
+		expect(questionLabel(25)).toBe('Z');
+		expect(questionLabel(26)).toBe('27');
+	});
+});
+
+describe('palindrome - 投影', () => {
+	const extraOf = (q: Question | undefined) => q?.extra as Record<string, unknown> | undefined;
+
+	it('開始前は参加者とモニターに問題を送らない', () => {
+		const game = createTestGame();
+		expect(project(game, {role: 'monitor'}).questions).toEqual([]);
+		expect(project(game, {role: 'participant', participantId: 'p1'}).questions).toEqual([]);
+		expect(project(game, {role: 'host'}).questions).toHaveLength(3);
+	});
+
+	it('開催中は答え・表記・別解を隠し、参加者本人が開けたヒントだけを送る', () => {
+		let game = startedGame();
+		game = run(game, {type: 'openHint', questionId: 'q1', kind: 'charTypes'}, 2000, p('p1'));
+		game = run(game, {type: 'answer', questionId: 'q1', text: 'たいこいこいた'}, 3000, p('p1'));
+
+		const monitor = project(game, {role: 'monitor'});
+		expect(monitor.questions.map((q) => q.id)).toEqual(['q1', 'q2', 'q3']);
+		expect(monitor.questions[0]?.answer).toBe('');
+		expect(monitor.questions[0]?.note).toBe('');
+		expect(extraOf(monitor.questions[0])).toEqual({image: 'media-q1', charCount: 7, hints: {}});
+		expect(monitor.state.attempts.q1?.p1?.wrong).toEqual([{text: '', at: 3000}]);
+		expect(monitor.state.attempts.q1?.p1?.hints).toEqual({charTypes: 2000});
+
+		const p1 = project(game, {role: 'participant', participantId: 'p1'});
+		expect(extraOf(p1.questions[0])?.hints).toEqual({charTypes: '漢ああ漢'});
+		expect(extraOf(p1.questions[1])?.hints).toEqual({});
+		expect(p1.state.attempts.q1?.p1?.wrong).toEqual([{text: 'たいこいこいた', at: 3000}]);
+
+		const p2 = project(game, {role: 'participant', participantId: 'p2'});
+		expect(extraOf(p2.questions[0])?.hints).toEqual({});
+		expect(p2.state.attempts.q1?.p1?.wrong).toEqual([{text: '', at: 3000}]);
+
+		const hostView = project(game, {role: 'host'});
+		expect(hostView.questions[0]?.answer).toBe('まくらからくま');
+		expect(hostView.state.attempts.q1?.p1?.wrong[0]?.text).toBe('たいこいこいた');
+	});
+
+	it('終了後と感想戦中は答えと全ヒントを公開する (他人の誤答の本文は隠したまま)', () => {
+		let game = startedGame();
+		game = run(game, {type: 'answer', questionId: 'q1', text: 'たいこいこいた'}, 3000, p('p1'));
+		game = run(game, {type: 'finish'}, 4000);
+		const monitor = project(game, {role: 'monitor'});
+		expect(monitor.questions[0]?.answer).toBe('まくらからくま');
+		expect(monitor.questions[0]?.note).toBe('');
+		expect(extraOf(monitor.questions[0])).toEqual({
+			image: 'media-q1',
+			notation: '枕から熊',
+			altAnswers: ['まくらがらくま'],
+			charCount: 7,
+			hints: {situation: 'q1 の状況', irasutoya: 'q1 の素材', charTypes: '漢ああ漢'},
+		});
+		expect(monitor.state.attempts.q1?.p1?.wrong).toEqual([{text: '', at: 3000}]);
+
+		game = run(game, {type: 'review.start'}, 5000);
+		expect(project(game, {role: 'monitor'}).questions[1]?.answer).toBe('とまと');
+	});
+});
+
+describe('palindrome - 感想戦と説明', () => {
+	it('reviewItems はコンテストの問題の並び', () => {
+		const game = startedGame();
+		expect(palindrome.reviewItems?.(createTestGame())).toEqual([]);
+		expect(palindrome.reviewItems?.(game)).toEqual([
+			{questionId: 'q1', recordIndex: 0},
+			{questionId: 'q2', recordIndex: 1},
+			{questionId: 'q3', recordIndex: 2},
+		]);
+		let reviewing = run(run(game, {type: 'finish'}, 2000), {type: 'review.start'}, 3000);
+		reviewing = run(reviewing, {type: 'review.move', index: 5}, 4000);
+		expect(reviewing.review).toEqual({index: 2});
+	});
+
+	it('askedQuestionIds は開始後の問題', () => {
+		expect(palindrome.askedQuestionIds?.(createTestGame())).toEqual(new Set());
+		expect(palindrome.askedQuestionIds?.(startedGame())).toEqual(new Set(['q1', 'q2', 'q3']));
+	});
+
+	it('describe はコマンドの説明を返す', () => {
+		const game = startedGame();
+		expect(describeCommand(game, {type: 'start'} as {type: string})).toBe('コンテストを開始');
+		expect(describeCommand(game, {type: 'extend', minutes: 5} as {type: string})).toBe('5 分延長');
+		expect(
+			describeCommand(game, {type: 'openHint', questionId: 'q2', kind: 'charTypes'} as {
+				type: string;
+			}),
+		).toBe('問題 B の文字種ヒントを開けた');
+		expect(
+			describeCommand(game, {
+				type: 'answer',
+				questionId: 'q1',
+				text: 'x',
+				participantId: 'p3',
+			} as {type: string}),
+		).toBe('AIさんが問題 A に回答');
 	});
 });

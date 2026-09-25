@@ -1,17 +1,9 @@
 import type {Participant} from '../../types.ts';
-import {HINT_PENALTIES, type HintKind, type PalindromeQuestionRecord} from './types.ts';
+import {HINT_PENALTIES, type HintKind, type PalindromeState} from './types.ts';
 
-export interface PalindromeQuestionStanding {
-	rank: number;
-	participantId: string;
-	correct: boolean;
-	correctAt: number | null;
-	elapsedMs: number | null;
-	penaltyMs: number;
-	recordTimeMs: number | null;
-	wrongCount: number;
-	openedHints: HintKind[];
-}
+/** 問題の番号 (A, B, C…。27 問目以降は数字) */
+export const questionLabel = (index: number): string =>
+	index < 26 ? String.fromCharCode(65 + index) : String(index + 1);
 
 export const computeQuestionPenalty = (hints: Partial<Record<HintKind, number>>): number => {
 	let penalty = 0;
@@ -21,165 +13,168 @@ export const computeQuestionPenalty = (hints: Partial<Record<HintKind, number>>)
 	return penalty;
 };
 
+/** スコアボードの1マス (参加者1人 × 1問) */
+export interface PalindromeCell {
+	solved: boolean;
+	/** 開始から正解までの時間 */
+	elapsedMs: number | null;
+	/** この問題の誤答数 (正解していなくても数える。表示用) */
+	wrongCount: number;
+	hints: HintKind[];
+	penaltyMs: number;
+	/** この問題を最初に正解した人か */
+	firstSolver: boolean;
+}
+
+export interface PalindromeStanding {
+	rank: number;
+	participantId: string;
+	solvedCount: number;
+	/** 最後に正解した時刻 (開始からの経過時間)。正解がなければ 0 */
+	lastSolvedElapsedMs: number;
+	/** 正解した問題で開けたヒントのペナルティの合計 */
+	penaltyMs: number;
+	/** 最終正答時間 + ペナルティ */
+	scoreTimeMs: number;
+	/** 正解した問題の誤答数の合計 */
+	wrongCount: number;
+	cells: Record<string, PalindromeCell>;
+}
+
+/** 問題ごとの最初の正解時刻 */
+const firstCorrectAt = (state: PalindromeState, participants: Participant[]) => {
+	const result = new Map<string, number>();
+	for (const questionId of state.questionIds) {
+		for (const p of participants) {
+			const correctAt = state.attempts[questionId]?.[p.id]?.correctAt ?? null;
+			if (correctAt === null) continue;
+			const current = result.get(questionId);
+			if (current === undefined || correctAt < current) {
+				result.set(questionId, correctAt);
+			}
+		}
+	}
+	return result;
+};
+
 /**
- * 問題ごとの順位を計算する。
- * 正解者を記録時間 (経過時間 + 開けたヒントのペナルティ) の短い順に並べ、同じなら誤答の少ない順。
- * 正解していない人はその後ろに並べる。
+ * 総合順位を計算する。
+ * 正答数の多い順 → 最終正答時間 + (正解した問題の) ヒントペナルティ の短い順 → (正解した問題の) 誤答数の少ない順。
+ * すべて同じなら同順位 (1, 2, 2, 4…)。
  */
-export const computeQuestionStandings = (
-	record: PalindromeQuestionRecord,
+export const computeStandings = (
+	state: PalindromeState,
 	participants: Participant[],
-): PalindromeQuestionStanding[] => {
-	const standings: PalindromeQuestionStanding[] = participants.map((p) => {
-		const pRec = record.participants[p.id];
-		const hints = pRec?.hints ?? {};
-		const wrong = pRec?.wrong ?? [];
-		const correctAt = pRec?.correctAt ?? null;
-		const correct = correctAt !== null;
-		const elapsedMs = correct ? correctAt - record.openedAt : null;
-		const penaltyMs = computeQuestionPenalty(hints);
-		const recordTimeMs = correct && elapsedMs !== null ? elapsedMs + penaltyMs : null;
-		const openedHints = Object.keys(hints) as HintKind[];
+): PalindromeStanding[] => {
+	const startedAt = state.startedAt ?? 0;
+	const firsts = firstCorrectAt(state, participants);
+
+	const standings: PalindromeStanding[] = participants.map((p) => {
+		const cells: Record<string, PalindromeCell> = {};
+		let solvedCount = 0;
+		let lastSolvedElapsedMs = 0;
+		let penaltyMs = 0;
+		let wrongCount = 0;
+
+		for (const questionId of state.questionIds) {
+			const attempt = state.attempts[questionId]?.[p.id];
+			const hints = attempt?.hints ?? {};
+			const wrong = attempt?.wrong ?? [];
+			const correctAt = attempt?.correctAt ?? null;
+			const solved = correctAt !== null;
+			const cellPenalty = computeQuestionPenalty(hints);
+			const elapsedMs = solved ? correctAt - startedAt : null;
+			cells[questionId] = {
+				solved,
+				elapsedMs,
+				wrongCount: wrong.length,
+				hints: Object.keys(hints) as HintKind[],
+				penaltyMs: cellPenalty,
+				firstSolver: solved && firsts.get(questionId) === correctAt,
+			};
+			if (solved && elapsedMs !== null) {
+				solvedCount += 1;
+				lastSolvedElapsedMs = Math.max(lastSolvedElapsedMs, elapsedMs);
+				penaltyMs += cellPenalty;
+				wrongCount += wrong.length;
+			}
+		}
+
 		return {
 			rank: 0,
 			participantId: p.id,
-			correct,
-			correctAt,
-			elapsedMs,
+			solvedCount,
+			lastSolvedElapsedMs,
 			penaltyMs,
-			recordTimeMs,
-			wrongCount: wrong.length,
-			openedHints,
+			scoreTimeMs: lastSolvedElapsedMs + penaltyMs,
+			wrongCount,
+			cells,
 		};
 	});
 
-	// ソート: 正解者 (記録時間昇順 → 誤答数昇順 → 正解時刻昇順 → participantId 昇順)
-	// 未正解者: 誤答数昇順 → participantId 昇順
-	standings.sort((a, b) => {
-		if (a.correct && !b.correct) return -1;
-		if (!a.correct && b.correct) return 1;
-		if (a.correct && b.correct) {
-			if (a.recordTimeMs !== b.recordTimeMs) {
-				return (a.recordTimeMs ?? 0) - (b.recordTimeMs ?? 0);
-			}
-			if (a.wrongCount !== b.wrongCount) {
-				return a.wrongCount - b.wrongCount;
-			}
-			if (a.correctAt !== b.correctAt) {
-				return (a.correctAt ?? 0) - (b.correctAt ?? 0);
-			}
-			return a.participantId.localeCompare(b.participantId);
-		}
-		if (a.wrongCount !== b.wrongCount) {
-			return a.wrongCount - b.wrongCount;
-		}
-		return a.participantId.localeCompare(b.participantId);
-	});
+	const compare = (a: PalindromeStanding, b: PalindromeStanding) =>
+		b.solvedCount - a.solvedCount || a.scoreTimeMs - b.scoreTimeMs || a.wrongCount - b.wrongCount;
 
-	// 順位付け (1, 2, 2, 4...)
-	const correctCount = standings.filter((s) => s.correct).length;
-	for (let i = 0; i < standings.length; i++) {
-		const s = standings[i];
-		if (!s) continue;
-		if (s.correct) {
-			if (i > 0) {
-				const prev = standings[i - 1];
-				if (
-					prev?.correct &&
-					prev.recordTimeMs === s.recordTimeMs &&
-					prev.wrongCount === s.wrongCount
-				) {
-					s.rank = prev.rank;
-				} else {
-					s.rank = i + 1;
-				}
-			} else {
-				s.rank = 1;
-			}
-		} else {
-			s.rank = correctCount + 1;
-		}
-	}
+	standings.sort((a, b) => compare(a, b) || a.participantId.localeCompare(b.participantId));
+
+	standings.forEach((s, i) => {
+		const prev = standings[i - 1];
+		s.rank = prev && compare(prev, s) === 0 ? prev.rank : i + 1;
+	});
 
 	return standings;
 };
 
-export interface PalindromeOverallStanding {
-	rank: number;
+export interface PalindromeSolver {
 	participantId: string;
-	correctCount: number;
-	totalRecordTimeMs: number;
-	totalWrongCount: number;
+	correctAt: number;
+	elapsedMs: number;
+	hints: HintKind[];
+	penaltyMs: number;
+	wrongCount: number;
 }
 
-/**
- * 総合順位を計算する。
- * 正解した問題の多い順 → 正解した問題の記録時間の合計の短い順 → 誤答の合計の少ない順。
- */
-export const computeOverallStandings = (
-	history: PalindromeQuestionRecord[],
+export interface PalindromeQuestionSummary {
+	/** 正解した順 */
+	solvers: PalindromeSolver[];
+	/** 最初の正解者 (同時なら複数) */
+	firstSolverIds: string[];
+	/** 挑戦した (ヒントを開けたか回答した) が正解できなかった人数 */
+	unsolvedTriedCount: number;
+}
+
+/** 1問ごとの正解者の一覧 (感想戦で使う) */
+export const computeQuestionSummary = (
+	state: PalindromeState,
+	questionId: string,
 	participants: Participant[],
-): PalindromeOverallStanding[] => {
-	const standings: PalindromeOverallStanding[] = participants.map((p) => {
-		let correctCount = 0;
-		let totalRecordTimeMs = 0;
-		let totalWrongCount = 0;
-
-		for (const record of history) {
-			const pRec = record.participants[p.id];
-			if (!pRec) continue;
-			totalWrongCount += pRec.wrong.length;
-			if (pRec.correctAt !== null) {
-				correctCount += 1;
-				const elapsed = pRec.correctAt - record.openedAt;
-				const penalty = computeQuestionPenalty(pRec.hints);
-				totalRecordTimeMs += elapsed + penalty;
-			}
+): PalindromeQuestionSummary => {
+	const startedAt = state.startedAt ?? 0;
+	const solvers: PalindromeSolver[] = [];
+	let unsolvedTriedCount = 0;
+	for (const p of participants) {
+		const attempt = state.attempts[questionId]?.[p.id];
+		if (!attempt) continue;
+		if (attempt.correctAt === null) {
+			unsolvedTriedCount += 1;
+			continue;
 		}
-
-		return {
-			rank: 0,
+		solvers.push({
 			participantId: p.id,
-			correctCount,
-			totalRecordTimeMs,
-			totalWrongCount,
-		};
-	});
-
-	// ソート: 正解数降順 → 総記録時間昇順 → 総誤答数昇順 → participantId 昇順
-	standings.sort((a, b) => {
-		if (a.correctCount !== b.correctCount) {
-			return b.correctCount - a.correctCount;
-		}
-		if (a.totalRecordTimeMs !== b.totalRecordTimeMs) {
-			return a.totalRecordTimeMs - b.totalRecordTimeMs;
-		}
-		if (a.totalWrongCount !== b.totalWrongCount) {
-			return a.totalWrongCount - b.totalWrongCount;
-		}
-		return a.participantId.localeCompare(b.participantId);
-	});
-
-	// 順位付け (1, 2, 2, 4...)
-	for (let i = 0; i < standings.length; i++) {
-		const s = standings[i];
-		if (!s) continue;
-		if (i > 0) {
-			const prev = standings[i - 1];
-			if (
-				prev &&
-				prev.correctCount === s.correctCount &&
-				prev.totalRecordTimeMs === s.totalRecordTimeMs &&
-				prev.totalWrongCount === s.totalWrongCount
-			) {
-				s.rank = prev.rank;
-			} else {
-				s.rank = i + 1;
-			}
-		} else {
-			s.rank = 1;
-		}
+			correctAt: attempt.correctAt,
+			elapsedMs: attempt.correctAt - startedAt,
+			hints: Object.keys(attempt.hints) as HintKind[],
+			penaltyMs: computeQuestionPenalty(attempt.hints),
+			wrongCount: attempt.wrong.length,
+		});
 	}
-
-	return standings;
+	solvers.sort(
+		(a, b) => a.correctAt - b.correctAt || a.participantId.localeCompare(b.participantId),
+	);
+	const first = solvers[0]?.correctAt;
+	return {
+		solvers,
+		firstSolverIds: solvers.filter((s) => s.correctAt === first).map((s) => s.participantId),
+		unsolvedTriedCount,
+	};
 };

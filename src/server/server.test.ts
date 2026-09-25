@@ -2,6 +2,7 @@ import {io as connect, type Socket} from 'socket.io-client';
 import {afterEach, beforeEach, describe, expect, it} from 'vitest';
 import type {BuzzerBoardState} from '../shared/modes/buzzer-board/index.ts';
 import type {ListeningMathState} from '../shared/modes/listening-math/index.ts';
+import type {PalindromeState} from '../shared/modes/palindrome/index.ts';
 import type {SimpleBuzzerState} from '../shared/modes/simple-buzzer/index.ts';
 import type {ClientToServerEvents, ServerToClientEvents} from '../shared/protocol.ts';
 import type {GameView} from '../shared/types.ts';
@@ -548,5 +549,80 @@ describe('サーバー', () => {
 			answer: '1',
 			extra: {audio: 'a1', explanation: '$1$', source: 'オリジナル'},
 		});
+	});
+
+	it('palindrome: コンテストの開始から感想戦まで、全画面に同期される', async () => {
+		const host = await client();
+		const created = await call(host, 'createGame', {
+			mode: 'palindrome',
+			title: '回文',
+			password: PASSWORD,
+		});
+		const {gameId} = created;
+		await call(host, 'subscribe', {gameId, role: 'host', password: PASSWORD});
+		const hints = {situation: '状況', irasutoya: '素材'};
+		await call(host, 'command', {
+			type: 'questions.import',
+			replace: true,
+			questions: [
+				{text: '', answer: 'とまと', extra: {image: 'm1', notation: 'トマト', hints}},
+				{text: '', answer: 'たいいた', extra: {image: 'm2', notation: '鯛板', hints}},
+			],
+		});
+		const monitor = await client();
+		await call(monitor, 'subscribe', {gameId, role: 'monitor'});
+		const alice = await joinAs(gameId, 'Alice');
+		const bob = await joinAs(gameId, 'Bob');
+
+		expect(await call(host, 'command', {type: 'setDuration', minutes: 10})).toEqual({ok: true});
+		const monitorStarted = waitForView<PalindromeState>(
+			monitor,
+			(v) => v.game.state.phase === 'running',
+		);
+		expect(await call(host, 'command', {type: 'start'})).toEqual({ok: true});
+		const started = await monitorStarted;
+		const [q1, q2] = started.game.state.questionIds;
+		expect(started.game.questions.map((q) => q.answer)).toEqual(['', '']);
+
+		// 参加者は好きな問題から解ける
+		expect(
+			await call(alice.socket, 'command', {type: 'openHint', questionId: q2, kind: 'charTypes'}),
+		).toEqual({ok: true});
+		expect(
+			await call(alice.socket, 'command', {type: 'answer', questionId: q2, text: 'たいいた'}),
+		).toEqual({ok: true});
+		expect(
+			await call(bob.socket, 'command', {type: 'answer', questionId: q1, text: 'たまた'}),
+		).toEqual({ok: true});
+		// 取り消すと Bob の誤答だけが消える
+		expect(await call(host, 'undo')).toMatchObject({ok: true});
+		const monitorSolved = waitForView<PalindromeState>(
+			monitor,
+			(v) => v.game.state.attempts[q1 ?? '']?.[bob.participantId]?.correctAt != null,
+		);
+		expect(
+			await call(bob.socket, 'command', {type: 'answer', questionId: q1, text: 'とまと'}),
+		).toEqual({ok: true});
+		const solved = await monitorSolved;
+		expect(solved.game.state.attempts[q1 ?? '']?.[bob.participantId]?.wrong).toEqual([]);
+		expect(solved.game.state.attempts[q2 ?? '']?.[alice.participantId]?.hints).toHaveProperty(
+			'charTypes',
+		);
+
+		// 打ち切ると回答できなくなり、答えが公開される
+		const monitorFinished = waitForView<PalindromeState>(
+			monitor,
+			(v) => v.game.state.phase === 'finished',
+		);
+		expect(await call(host, 'command', {type: 'finish'})).toEqual({ok: true});
+		expect(
+			await call(alice.socket, 'command', {type: 'answer', questionId: q1, text: 'とまと'}),
+		).toEqual({ok: false, error: 'コンテストは終了しました'});
+		const finished = await monitorFinished;
+		expect(finished.game.questions.map((q) => q.answer)).toEqual(['とまと', 'たいいた']);
+
+		const monitorReview = waitForView<PalindromeState>(monitor, (v) => v.game.review !== null);
+		expect(await call(host, 'command', {type: 'review.start'})).toEqual({ok: true});
+		expect((await monitorReview).game.review).toEqual({index: 0});
 	});
 });

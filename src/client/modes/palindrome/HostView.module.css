@@ -3,10 +3,9 @@
 	flex-direction: column;
 	gap: 20px;
 	padding: 24px;
-	max-width: 1200px;
+	max-width: 1400px;
 	margin: 0 auto;
 	color: var(--color-text, #1e293b);
-	font-family: system-ui, -apple-system, sans-serif;
 }
 
 .header {
@@ -21,8 +20,8 @@
 
 .titleArea {
 	display: flex;
-	flex-direction: column;
-	gap: 4px;
+	align-items: center;
+	gap: 12px;
 }
 
 .gameTitle {
@@ -36,30 +35,24 @@
 	border-radius: 9999px;
 	font-size: 0.85rem;
 	font-weight: 700;
-}
-
-.phase_waiting {
 	background: #f1f5f9;
 	color: #64748b;
 }
 
-.phase_open {
+.phaseBadge[data-phase="running"] {
 	background: #eff6ff;
 	color: #2563eb;
 }
 
-.phase_closed {
+.phaseBadge[data-phase="review"] {
 	background: #fef3c7;
-	color: #d97706;
-}
-
-.phase_finished {
-	background: #f1f5f9;
-	color: #64748b;
+	color: #b45309;
 }
 
 .headerLinks {
 	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
 	gap: 12px;
 	font-size: 0.9rem;
 }
@@ -67,7 +60,7 @@
 .controlBar {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 12px;
+	gap: 16px;
 	align-items: center;
 	background: #ffffff;
 	padding: 16px;
@@ -75,268 +68,221 @@
 	box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
 }
 
-.buttonPrimary {
-	padding: 10px 18px;
-	font-size: 0.95rem;
-	font-weight: 700;
-	background: #2563eb;
-	color: #ffffff;
-	border: none;
-	border-radius: 8px;
-	cursor: pointer;
-}
-
-.buttonPrimary:disabled {
-	background: #94a3b8;
-	cursor: not-allowed;
-}
-
-.buttonSecondary {
-	padding: 10px 18px;
-	font-size: 0.95rem;
-	font-weight: 700;
-	background: #f8fafc;
-	color: #1e293b;
-	border: 1px solid #cbd5e1;
-	border-radius: 8px;
-	cursor: pointer;
-}
-
-.buttonSecondary:disabled {
-	opacity: 0.5;
-	cursor: not-allowed;
-}
-
-.buttonDanger {
-	padding: 10px 18px;
-	font-size: 0.95rem;
-	font-weight: 700;
-	background: #fee2e2;
-	color: #991b1b;
-	border: 1px solid #fecaca;
-	border-radius: 8px;
-	cursor: pointer;
-}
-
-.buttonStandingsActive {
-	background: #fef3c7;
-	color: #92400e;
-	border-color: #fde68a;
-}
-
-/* 問題情報パネル */
-.questionPanel {
-	background: #ffffff;
-	border-radius: 12px;
-	padding: 20px;
-	box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
-	display: grid;
-	grid-template-columns: 240px 1fr;
-	gap: 24px;
-}
-
-@media (max-width: 768px) {
-	.questionPanel {
-		grid-template-columns: 1fr;
-	}
-}
-
-.imageArea {
+.inlineForm {
 	display: flex;
-	flex-direction: column;
+	flex-wrap: wrap;
 	align-items: center;
 	gap: 8px;
 }
 
-.questionImage {
-	max-width: 100%;
-	max-height: 200px;
-	object-fit: contain;
-	border-radius: 8px;
-	border: 1px solid #e2e8f0;
+.inlineForm label {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-weight: 700;
 }
 
-.questionInfo {
+.numberInput {
+	width: 5em;
+	padding: 6px 8px;
+	border: 1px solid #cbd5e1;
+	border-radius: 6px;
+}
+
+.clock {
+	font-size: 2rem;
+	font-weight: 900;
+	font-variant-numeric: tabular-nums;
+	color: #2563eb;
+}
+
+.clock[data-over="true"] {
+	color: #64748b;
+}
+
+.buttonPrimary,
+.buttonSecondary,
+.buttonDanger {
+	padding: 10px 18px;
+	font-size: 0.95rem;
+	font-weight: 700;
+	border-radius: 8px;
+}
+
+.buttonPrimary {
+	margin-left: auto;
+	background: #2563eb;
+	color: #ffffff;
+	border: none;
+}
+
+.buttonPrimary:where(:hover:not(:disabled)) {
+	background: #1d4ed8;
+}
+
+.buttonSecondary {
+	padding: 6px 12px;
+	background: #f8fafc;
+	border: 1px solid #cbd5e1;
+}
+
+.buttonDanger {
+	margin-left: auto;
+	background: #fee2e2;
+	color: #991b1b;
+	border: 1px solid #fecaca;
+}
+
+.card {
+	background: #ffffff;
+	border-radius: 12px;
+	padding: 16px 20px;
+	box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
+}
+
+.cardTitle {
+	margin: 0 0 12px;
+	font-size: 1.1rem;
+}
+
+.scoreboardWrap {
+	overflow-x: auto;
+}
+
+.muted {
+	color: #64748b;
+	font-size: 0.9rem;
+}
+
+.questionList {
 	display: flex;
 	flex-direction: column;
 	gap: 12px;
+}
+
+.questionCard {
+	display: grid;
+	grid-template-columns: 48px 180px 1fr;
+	gap: 16px;
+	padding: 12px;
+	border: 1px solid #e2e8f0;
+	border-radius: 10px;
+}
+
+@media (max-width: 768px) {
+	.questionCard {
+		grid-template-columns: 40px 1fr;
+	}
+
+	.questionBody {
+		grid-column: 1 / -1;
+	}
+}
+
+.questionLabel {
+	font-size: 1.75rem;
+	font-weight: 900;
+	color: #1e3a8a;
+	text-align: center;
+}
+
+.questionImageArea {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.questionImage {
+	max-width: 100%;
+	max-height: 140px;
+	object-fit: contain;
+	border-radius: 6px;
+}
+
+.questionBody {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 0;
 }
 
 .answerRow {
 	display: flex;
 	align-items: baseline;
-	gap: 12px;
 	flex-wrap: wrap;
+	gap: 12px;
 }
 
 .answerText {
-	font-size: 1.75rem;
+	font-size: 1.4rem;
 	font-weight: 900;
 	color: #1e3a8a;
 }
 
 .notationText {
-	font-size: 1.25rem;
+	font-size: 1.1rem;
 	font-weight: 700;
 	color: #475569;
 }
 
-.altAnswersText {
+.note {
 	font-size: 0.85rem;
-	color: #64748b;
+	color: #92400e;
+	background: #fffbeb;
+	padding: 4px 8px;
+	border-radius: 6px;
 }
 
-.hintsGrid {
+.hintList {
+	margin: 0;
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-	gap: 12px;
-	margin-top: 8px;
+	gap: 6px 12px;
+	font-size: 0.85rem;
 }
 
-.hintCard {
-	background: #f8fafc;
-	border: 1px solid #e2e8f0;
-	border-radius: 8px;
-	padding: 10px 12px;
-}
-
-.hintLabel {
-	font-size: 0.75rem;
+.hintItem dt {
 	font-weight: 700;
 	color: #64748b;
-	margin-bottom: 4px;
 }
 
-.hintContent {
-	font-size: 0.9rem;
-	color: #1e293b;
-	line-height: 1.4;
+.hintItem dd {
+	margin: 0;
 }
 
-/* 参加者状況テーブル */
-.tableCard {
-	background: #ffffff;
-	border-radius: 12px;
-	padding: 20px;
-	box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
-}
-
-.tableHeader {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	margin-bottom: 16px;
-}
-
-.tableTitle {
-	font-size: 1.2rem;
-	font-weight: 700;
-}
-
-.tableWrapper {
-	overflow-x: auto;
-}
-
-.table {
-	width: 100%;
-	border-collapse: collapse;
-	font-size: 0.9rem;
-	text-align: left;
-}
-
-.table th {
-	padding: 10px 12px;
-	border-bottom: 2px solid #e2e8f0;
-	color: #64748b;
-	font-weight: 700;
-	white-space: nowrap;
-}
-
-.table td {
-	padding: 10px 12px;
-	border-bottom: 1px solid #f1f5f9;
-	vertical-align: top;
-}
-
-.rankCell {
-	font-weight: 800;
-	font-variant-numeric: tabular-nums;
-	width: 48px;
-}
-
-.participantCell {
-	font-weight: 700;
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	white-space: nowrap;
-}
-
-.aiBadge {
-	display: inline-block;
-	padding: 1px 6px;
-	border-radius: 4px;
-	background: #f3e8ff;
-	color: #7e22ce;
-	font-size: 0.75rem;
-	font-weight: 700;
-}
-
-.statusCorrect {
-	color: #059669;
-	font-weight: 800;
-}
-
-.statusAnswering {
-	color: #2563eb;
-	font-weight: 600;
-}
-
-.statusWrong {
-	color: #dc2626;
-	font-weight: 600;
-}
-
-.badgeList {
+.solvers {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 4px;
+	align-items: center;
+	gap: 6px;
+	font-size: 0.85rem;
 }
 
-.hintBadge {
-	padding: 2px 6px;
-	border-radius: 4px;
-	font-size: 0.75rem;
-	font-weight: 600;
-	background: #fef3c7;
-	color: #92400e;
+.solverChip {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 1px 8px;
+	border-radius: 9999px;
+	background: #dcfce7;
+	color: #166534;
+	font-variant-numeric: tabular-nums;
+}
+
+.solverChip[data-first="true"] {
+	box-shadow: inset 0 0 0 2px #16a34a;
+	font-weight: 700;
 }
 
 .wrongList {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-	font-size: 0.8rem;
+	margin: 0;
+	padding-left: 1.2em;
+	font-size: 0.85rem;
+	color: #b91c1c;
 }
 
-.wrongItem {
-	color: #dc2626;
-	text-decoration: line-through;
-}
-
-/* AI プレースホルダー */
-.aiPlaceholderCard {
-	background: #fbfbfe;
-	border: 2px dashed #cbd5e1;
-	border-radius: 12px;
-	padding: 20px;
-	text-align: center;
-	color: #64748b;
-}
-
-.aiPlaceholderTitle {
-	font-size: 1rem;
+.wrongName {
 	font-weight: 700;
+	margin-right: 0.5em;
 	color: #475569;
-	margin-bottom: 4px;
 }

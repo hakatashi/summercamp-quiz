@@ -1,0 +1,198 @@
+/* スコアボード。data-variant="page" は明るい画面 (参加者・司会者)、"monitor" は 1920×1080 の暗い画面 */
+.table {
+	width: 100%;
+	border-collapse: separate;
+	border-spacing: 0;
+	font-variant-numeric: tabular-nums;
+	table-layout: fixed;
+}
+
+.table :where(th, td) {
+	text-align: center;
+	vertical-align: middle;
+	padding: 4px 6px;
+	border-bottom: 1px solid var(--line);
+}
+
+.table[data-variant="page"] {
+	--line: #e2e8f0;
+	--head-bg: #f8fafc;
+	--solved-bg: #dcfce7;
+	--solved-text: #166534;
+	--first-bg: #bbf7d0;
+	--first-border: #16a34a;
+	--miss-text: #dc2626;
+	--muted: #64748b;
+	--self-bg: #eff6ff;
+	font-size: 0.85rem;
+	min-width: calc(260px + var(--question-count) * 56px);
+}
+
+.table[data-variant="monitor"] {
+	--line: rgb(255 255 255 / 0.1);
+	--head-bg: rgb(255 255 255 / 0.08);
+	--solved-bg: rgb(34 197 94 / 0.25);
+	--solved-text: #bbf7d0;
+	--first-bg: rgb(34 197 94 / 0.55);
+	--first-border: #4ade80;
+	--miss-text: #fca5a5;
+	--muted: #94a3b8;
+	--self-bg: transparent;
+	color: #f8fafc;
+	font-size: 26px;
+	line-height: 1.2;
+}
+
+.table thead th {
+	background: var(--head-bg);
+	font-weight: 700;
+	color: var(--muted);
+	position: sticky;
+	top: 0;
+}
+
+.table[data-variant="monitor"] thead th {
+	font-size: 24px;
+	padding: 10px 6px;
+	color: #cbd5e1;
+}
+
+.rankHead {
+	width: 3.2em;
+}
+
+.nameHead {
+	width: 9em;
+	text-align: left;
+}
+
+.scoreHead {
+	width: 3.2em;
+}
+
+.timeHead {
+	width: 5.6em;
+}
+
+.table[data-variant="monitor"] .nameHead {
+	width: 300px;
+}
+
+.questionHead {
+	font-weight: 800;
+}
+
+.row[data-self="true"] td {
+	background: var(--self-bg);
+}
+
+.rank {
+	font-weight: 800;
+}
+
+.name {
+	text-align: left;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	font-weight: 700;
+}
+
+.nameText {
+	vertical-align: middle;
+}
+
+.aiBadge {
+	display: inline-block;
+	margin-left: 0.4em;
+	padding: 0 0.4em;
+	border-radius: 4px;
+	background: #7c3aed;
+	color: #fff;
+	font-size: 0.7em;
+	font-weight: 800;
+	vertical-align: middle;
+}
+
+.score {
+	font-weight: 900;
+	font-size: 1.2em;
+}
+
+.time {
+	white-space: nowrap;
+}
+
+.cell {
+	white-space: nowrap;
+	overflow: hidden;
+	line-height: 1.2;
+}
+
+.cell[data-result="solved"] {
+	background: var(--solved-bg);
+	color: var(--solved-text);
+}
+
+.cell[data-result="first"] {
+	background: var(--first-bg);
+	color: var(--solved-text);
+	box-shadow: inset 0 0 0 2px var(--first-border);
+}
+
+.cellTime {
+	font-weight: 700;
+}
+
+.cellSub {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	gap: 0.3em;
+	font-size: 0.7em;
+	color: var(--muted);
+	min-height: 1em;
+}
+
+.cellWrong {
+	color: var(--miss-text);
+	font-weight: 700;
+}
+
+.cellMiss {
+	color: var(--miss-text);
+	font-weight: 800;
+}
+
+.hintIcons {
+	display: inline-flex;
+	gap: 2px;
+}
+
+.hintIcon {
+	display: inline-block;
+	min-width: 1.3em;
+	padding: 0 0.15em;
+	border-radius: 3px;
+	font-size: 0.9em;
+	font-weight: 800;
+	line-height: 1.3;
+	color: #fff;
+}
+
+.hintIcon[data-kind="situation"] {
+	background: #ea580c;
+}
+
+.hintIcon[data-kind="irasutoya"] {
+	background: #ca8a04;
+}
+
+.hintIcon[data-kind="charTypes"] {
+	background: #0891b2;
+}
+
+/* 問題が多いときは、問題の列を縮める */
+.table[data-variant="monitor"] .cell {
+	font-size: clamp(16px, calc(1200px / var(--question-count) / 3.4), 28px);
+}

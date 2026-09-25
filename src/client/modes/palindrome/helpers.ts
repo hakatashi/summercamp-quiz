@@ -1,5 +1,6 @@
 import {
-	currentRecord,
+	getCharTypesHint,
+	type HintKind,
 	type PalindromeQuestionExtra,
 	type PalindromeState,
 } from '../../../shared/modes/palindrome/index.ts';
@@ -31,23 +32,49 @@ export const formatPenalty = (penaltyMs: number): string => {
 	return `+${seconds} 秒`;
 };
 
-export const findQuestion = (
-	game: Game<PalindromeState>,
-	questionId: string,
-): Question | undefined => game.questions.find((q) => q.id === questionId);
-
-export const currentQuestion = (game: Game<PalindromeState>): Question | undefined => {
-	const record = currentRecord(game.state);
-	return record ? findQuestion(game, record.questionId) : undefined;
-};
-
-export const questionNumber = (state: PalindromeState): number => state.history.length;
-
-export const isOpen = (state: PalindromeState): boolean => state.phase === 'open';
-
 export const participantName = (game: Game<PalindromeState>, participantId: string): string => {
 	const p = game.participants.find((item) => item.id === participantId);
 	return p ? p.name : '?';
+};
+
+/**
+ * コンテストの時間を "m:ss" (1 時間以上は "h:mm:ss") にフォーマットする。
+ */
+export const formatClock = (ms: number | null): string => {
+	if (ms === null || Number.isNaN(ms)) {
+		return '—';
+	}
+	const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+	const hours = Math.floor(totalSeconds / 3600);
+	const minutes = Math.floor((totalSeconds % 3600) / 60);
+	const seconds = totalSeconds % 60;
+	const ss = seconds.toString().padStart(2, '0');
+	return hours > 0 ? `${hours}:${minutes.toString().padStart(2, '0')}:${ss}` : `${minutes}:${ss}`;
+};
+
+/** 画面で扱う問題の追加情報。司会者には生の extra、それ以外には投影済みの extra が届くので、両方をならす */
+export interface QuestionView {
+	image: string;
+	charCount: number;
+	notation: string | null;
+	altAnswers: string[];
+	hints: Partial<Record<HintKind, string>>;
+}
+
+export const questionView = (question: Question): QuestionView => {
+	const extra = (question.extra ?? {}) as Partial<PalindromeQuestionExtra> & {charCount?: number};
+	const hints: Partial<Record<HintKind, string>> = {...(extra.hints ?? {})};
+	if (extra.notation !== undefined && extra.hints) {
+		// 司会者向けの生の extra では、文字種ヒントが省略されていれば表記から作る
+		hints.charTypes = getCharTypesHint(extra.notation, extra.hints.charTypes);
+	}
+	return {
+		image: extra.image ?? '',
+		charCount: extra.charCount ?? [...question.answer].length,
+		notation: extra.notation ?? null,
+		altAnswers: extra.altAnswers ?? [],
+		hints,
+	};
 };
 
 /**

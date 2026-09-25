@@ -2,12 +2,12 @@ import {describe, expect, it} from 'vitest';
 import type {PalindromeState} from '../../../shared/modes/palindrome/index.ts';
 import type {Game, Question} from '../../../shared/types.ts';
 import {
+	formatClock,
 	formatPenalty,
 	formatTime,
 	getQuestionWarning,
-	isOpen,
 	participantName,
-	questionNumber,
+	questionView,
 } from './helpers.ts';
 
 describe('palindrome helpers', () => {
@@ -34,21 +34,52 @@ describe('palindrome helpers', () => {
 		});
 	});
 
-	describe('questionNumber & isOpen', () => {
-		it('状態から正しく算出する', () => {
-			const state: PalindromeState = {
-				phase: 'open',
-				history: [
-					{questionId: 'q1', openedAt: 1000, closedAt: 2000, participants: {}},
-					{questionId: 'q2', openedAt: 3000, closedAt: null, participants: {}},
-				],
-				showStandings: false,
-			};
-			expect(questionNumber(state)).toBe(2);
-			expect(isOpen(state)).toBe(true);
+	describe('formatClock', () => {
+		it('m:ss 形式、1 時間以上は h:mm:ss 形式にする', () => {
+			expect(formatClock(0)).toBe('0:00');
+			expect(formatClock(65_900)).toBe('1:05');
+			expect(formatClock(30 * 60_000)).toBe('30:00');
+			expect(formatClock(3_725_000)).toBe('1:02:05');
+			expect(formatClock(-1000)).toBe('0:00');
+			expect(formatClock(null)).toBe('—');
+		});
+	});
 
-			state.phase = 'closed';
-			expect(isOpen(state)).toBe(false);
+	describe('questionView', () => {
+		const base: Question = {id: 'q1', text: '', answer: 'とまと', note: '', extra: {}};
+
+		it('司会者向けの生の extra から文字数と文字種ヒントを補う', () => {
+			const info = questionView({
+				...base,
+				extra: {
+					image: 'm1',
+					notation: 'トマト',
+					altAnswers: [],
+					hints: {situation: '野菜', irasutoya: 'トマト'},
+				},
+			});
+			expect(info).toEqual({
+				image: 'm1',
+				charCount: 3,
+				notation: 'トマト',
+				altAnswers: [],
+				hints: {situation: '野菜', irasutoya: 'トマト', charTypes: 'アアア'},
+			});
+		});
+
+		it('投影済みの extra (答えなし) では charCount を使う', () => {
+			const info = questionView({
+				...base,
+				answer: '',
+				extra: {image: 'm1', charCount: 3, hints: {charTypes: 'アアア'}},
+			});
+			expect(info).toEqual({
+				image: 'm1',
+				charCount: 3,
+				notation: null,
+				altAnswers: [],
+				hints: {charTypes: 'アアア'},
+			});
 		});
 	});
 
