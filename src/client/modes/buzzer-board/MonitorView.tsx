@@ -4,6 +4,7 @@ import {
 	describeResult,
 	GENRES,
 } from '../../../shared/modes/buzzer-board/index.ts';
+import {BuzzerSounds} from '../../components/BuzzerSounds.tsx';
 import type {ScreenProps} from '../types.ts';
 import {
 	boardListLayout,
@@ -331,6 +332,7 @@ export const MonitorView = ({view}: ScreenProps<BuzzerBoardState>) => {
 					<div className={styles.overlayScore}>{winners[0]?.score} pt</div>
 				</div>
 			)}
+			<BuzzerSounds record={state.history.at(-1) ?? null} />
 		</div>
 	);
 };

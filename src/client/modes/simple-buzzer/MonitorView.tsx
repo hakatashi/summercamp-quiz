@@ -3,6 +3,7 @@ import {
 	describeResult,
 	type SimpleBuzzerState,
 } from '../../../shared/modes/simple-buzzer/index.ts';
+import {BuzzerSounds} from '../../components/BuzzerSounds.tsx';
 import type {ScreenProps} from '../types.ts';
 import {
 	findQuestion,
@@ -138,6 +139,7 @@ export const MonitorView = ({view}: ScreenProps<SimpleBuzzerState>) => {
 					<div className={styles.overlayScore}>{winners[0]?.score} pt</div>
 				</div>
 			)}
+			<BuzzerSounds record={state.history.at(-1) ?? null} />
 		</div>
 	);
 };

@@ -1,0 +1,12 @@
+.notice {
+	position: absolute;
+	left: 24px;
+	bottom: 24px;
+	padding: 12px 20px;
+	font-size: 22px;
+	font-weight: 700;
+	color: #0f172a;
+	background: rgb(250 204 21 / 0.95);
+	border-radius: 12px;
+	box-shadow: 0 8px 24px rgb(0 0 0 / 0.4);
+}
