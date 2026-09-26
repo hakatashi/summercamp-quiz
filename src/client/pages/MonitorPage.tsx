@@ -1,6 +1,7 @@
 import {useParams} from 'react-router';
 import {getMode} from '../../shared/modes/registry.ts';
 import {HostGate} from '../components/HostGate.tsx';
+import {JoinQrOverlay} from '../components/JoinQrOverlay.tsx';
 import {MonitorStage} from '../components/MonitorStage.tsx';
 import {useGameList} from '../lib/useGameList.ts';
 import {screens} from '../modes/registry.ts';
@@ -11,9 +12,9 @@ const MonitorScreen = ({gameId, password}: {gameId: string; password?: string}) 
 	<GameScreen request={{gameId, role: 'monitor', password}}>
 		{(props) => {
 			const modeScreens = screens[props.view.game.mode];
+			const modeDef = getMode(props.view.game.mode);
 			const {review} = props.view.game;
 			if (review !== null && modeScreens.ReviewMonitor) {
-				const modeDef = getMode(props.view.game.mode);
 				const items = modeDef.reviewItems?.(props.view.game) ?? [];
 				const item = items[review.index];
 				if (item) {
@@ -29,6 +30,9 @@ const MonitorScreen = ({gameId, password}: {gameId: string; password?: string}) 
 			return Monitor ? (
 				<MonitorStage>
 					<Monitor {...props} />
+					{modeDef.isBeforeStart?.(props.view.game) && (
+						<JoinQrOverlay gameId={props.view.game.id} />
+					)}
 				</MonitorStage>
 			) : (
 				<Unsupported screen="モニター画面" />

@@ -651,5 +651,12 @@ describe('buzzer-board mode', () => {
 			expect(game.state.history.length).toBe(0);
 			expect(game.state.phase).toBe('waiting');
 		});
+
+		it('isBeforeStart は最初の出題の前だけ true になる', () => {
+			let game = createSampleGame(3);
+			expect(buzzerBoard.isBeforeStart?.(game)).toBe(true);
+			game = exec(game, {type: 'next', questionId: 'q1'}, host, 1000);
+			expect(buzzerBoard.isBeforeStart?.(game)).toBe(false);
+		});
 	});
 });

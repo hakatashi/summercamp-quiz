@@ -163,4 +163,7 @@ export const listeningMath: ModeDefinition<ListeningMathState, ListeningMathComm
 				return `問題の間隔を ${command.seconds} 秒に変更`;
 		}
 	},
+	isBeforeStart(game) {
+		return game.state.startedAt === null;
+	},
 };

@@ -346,4 +346,13 @@ describe('simple-buzzer', () => {
 		const participantGame = projectGame(game, {role: 'participant', participantId: 'a'});
 		expect(participantGame.questions.map((q) => q.id)).toEqual(['q1', 'q3']);
 	});
+
+	it('isBeforeStart は最初の出題の前だけ true になる', () => {
+		expect(simpleBuzzer.isBeforeStart?.(game)).toBe(true);
+		run({type: 'next'});
+		expect(simpleBuzzer.isBeforeStart?.(game)).toBe(false);
+		buzz('a');
+		run({type: 'judge', correct: true});
+		expect(simpleBuzzer.isBeforeStart?.(game)).toBe(false);
+	});
 });

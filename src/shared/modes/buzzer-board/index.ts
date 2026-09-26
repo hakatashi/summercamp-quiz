@@ -702,4 +702,7 @@ export const buzzerBoard: ModeDefinition<BuzzerBoardState, BuzzerBoardCommand> =
 	askedQuestionIds(game) {
 		return askedQuestionIds(game.state);
 	},
+	isBeforeStart(game) {
+		return game.state.phase === 'waiting';
+	},
 };

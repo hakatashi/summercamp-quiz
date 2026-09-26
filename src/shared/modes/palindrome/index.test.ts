@@ -435,6 +435,12 @@ describe('palindrome - 感想戦と説明', () => {
 		expect(palindrome.askedQuestionIds?.(startedGame())).toEqual(new Set(['q1', 'q2', 'q3']));
 	});
 
+	it('isBeforeStart はコンテスト開始前だけ true になる', () => {
+		expect(palindrome.isBeforeStart?.(createTestGame())).toBe(true);
+		expect(palindrome.isBeforeStart?.(startedGame())).toBe(false);
+		expect(palindrome.isBeforeStart?.(run(startedGame(), {type: 'finish'}, 2000))).toBe(false);
+	});
+
 	it('describe はコマンドの説明を返す', () => {
 		const game = startedGame();
 		expect(describeCommand(game, {type: 'start'} as {type: string})).toBe('コンテストを開始');

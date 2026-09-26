@@ -335,4 +335,7 @@ export const palindrome: ModeDefinition<PalindromeState, PalindromeCommand> = {
 	reviewItems(game) {
 		return game.state.questionIds.map((questionId, recordIndex) => ({questionId, recordIndex}));
 	},
+	isBeforeStart(game) {
+		return game.state.phase === 'waiting';
+	},
 };

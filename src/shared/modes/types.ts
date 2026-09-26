@@ -41,6 +41,8 @@ export interface ModeDefinition<S = unknown, C extends ModeCommand = ModeCommand
 	describe(command: C, game: Game<S>): string;
 	/** 出題済みの問題 ID の集合を返す (省略可) */
 	askedQuestionIds?(game: Game<S>): Set<string>;
+	/** まだ本戦が始まっていない (待機中) かどうか。true の間はモニターに参加用 QR コードを出す (省略時は false 扱い) */
+	isBeforeStart?(game: Game<S>): boolean;
 	/** 感想戦で振り返る項目の配列を返す (定義されていない企画では感想戦を開始できない) */
 	reviewItems?(game: Game<S>): ReviewItem[];
 }

@@ -9,6 +9,7 @@ import {Hono} from 'hono';
 import {Database} from './db.ts';
 import {GameManager} from './gameManager.ts';
 import {createMediaRouter} from './media.ts';
+import {getLanAddresses} from './network.ts';
 import {attachSocketServer} from './socket.ts';
 
 export interface AppOptions {
@@ -19,6 +20,10 @@ export interface AppOptions {
 	mediaDir?: string | undefined;
 	/** ビルド済みクライアントのディレクトリ。指定するとそこから静的配信する */
 	clientDir?: string | undefined;
+	/** 参加用 URL に優先して使うアドレス (環境変数 PUBLIC_HOST) */
+	publicHost?: string | undefined;
+	/** 参加者が接続すべきポート (省略時は実際に listen したポート) */
+	publicPort?: number | undefined;
 }
 
 export const createApp = (options: AppOptions) => {
@@ -35,15 +40,22 @@ export const createApp = (options: AppOptions) => {
 			: join(dirname(options.dbPath), 'media'));
 	app.route('/api/media', createMediaRouter({db, mediaDir, hostPassword: options.hostPassword}));
 
+	const httpServer = createAdaptorServer({fetch: app.fetch}) as HttpServer;
+	const io = attachSocketServer(httpServer, manager, {hostPassword: options.hostPassword});
+
+	// clientDir 配下の静的配信より前に登録する (でないと catch-all に奪われる)
+	app.get('/api/info', (c) => {
+		const listening = httpServer.address();
+		const port = options.publicPort ?? (typeof listening === 'object' ? (listening?.port ?? 0) : 0);
+		return c.json({addresses: getLanAddresses(options.publicHost), port});
+	});
+
 	const {clientDir} = options;
 	if (clientDir && existsSync(clientDir)) {
 		app.use('/*', serveStatic({root: clientDir}));
 		// SPA なので、存在しないパスには index.html を返す
 		app.get('*', async (c) => c.html(await readFile(join(clientDir, 'index.html'), 'utf8')));
 	}
-
-	const httpServer = createAdaptorServer({fetch: app.fetch}) as HttpServer;
-	const io = attachSocketServer(httpServer, manager, {hostPassword: options.hostPassword});
 
 	return {
 		manager,

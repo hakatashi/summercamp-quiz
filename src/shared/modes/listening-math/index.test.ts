@@ -52,6 +52,17 @@ describe('listening-math', () => {
 		expect(() => run(game, {type: 'progress', index: 1})).toThrow('出題中ではありません');
 	});
 
+	it('isBeforeStart は一度も出題していない間だけ true になる', () => {
+		const mode = getMode('listening-math');
+		const notStarted = withQuestions();
+		expect(mode.isBeforeStart?.(notStarted)).toBe(true);
+		const playing = run(notStarted, {type: 'play'}, 100);
+		expect(mode.isBeforeStart?.(playing)).toBe(false);
+		const stopped = run(playing, {type: 'stop'});
+		// 途中で止めても、一度出題したあとは待機中とはみなさない
+		expect(mode.isBeforeStart?.(stopped)).toBe(false);
+	});
+
 	it('指定した番号から出題できる', () => {
 		const game = run(withQuestions(), {type: 'play', index: 1});
 		expect(game.state.currentIndex).toBe(1);

@@ -347,4 +347,7 @@ export const simpleBuzzer: ModeDefinition<SimpleBuzzerState, SimpleBuzzerCommand
 	askedQuestionIds(game) {
 		return askedQuestionIds(game.state);
 	},
+	isBeforeStart(game) {
+		return game.state.phase === 'waiting';
+	},
 };
