@@ -1,4 +1,4 @@
-import {registerBuzz} from '../../buzz.ts';
+import {arrangeBuzzes, registerBuzz} from '../../buzz.ts';
 import {
 	type CommandContext,
 	CommandError,
@@ -9,6 +9,7 @@ import {
 import type {ModeDefinition} from '../types.ts';
 import {
 	type BoardAnswer,
+	type ButtonCheck,
 	type BuzzerBoardCommand,
 	type BuzzerBoardQuestionExtra,
 	type BuzzerBoardState,
@@ -103,9 +104,101 @@ const endQuestion = (
 	state.phase = 'closed';
 };
 
+const requireButtonCheck = (state: BuzzerBoardState): ButtonCheck => {
+	if (state.phase !== 'button-check' || !state.buttonCheck) {
+		throw new CommandError('ボタンチェック中ではありません');
+	}
+	return state.buttonCheck;
+};
+
+/** ボタンチェック中のコマンド。得点・休み・連答などには一切触れない */
+const applyButtonCheck = (game: G, command: BuzzerBoardCommand, ctx: CommandContext) => {
+	const check = requireButtonCheck(game.state);
+	switch (command.type) {
+		case 'buzz': {
+			if (ctx.actor.role !== 'participant') {
+				throw new CommandError('参加者だけがボタンを押せます');
+			}
+			const {participantId} = ctx.actor;
+			if (!game.participants.some((p) => p.id === participantId)) {
+				throw new CommandError('参加者として登録されていません');
+			}
+			if (
+				check.buzzes.some(
+					(b) =>
+						b.participantId === participantId &&
+						(b.status === 'waiting' || b.status === 'answering'),
+				)
+			) {
+				throw new CommandError('既にボタンを押しています');
+			}
+			// 前の判定結果は、次にボタンが押されたときに消す
+			const pending = check.buzzes.filter(
+				(b) => b.status === 'waiting' || b.status === 'answering',
+			);
+			check.buzzes = registerBuzz(pending, {
+				participantId,
+				declaredPressedAt: command.pressedAt,
+				startedAt: check.roundStartedAt,
+				receivedAt: ctx.now,
+			}).buzzes;
+			return;
+		}
+		case 'judge': {
+			const answering = check.buzzes.find((b) => b.status === 'answering');
+			if (!answering) {
+				throw new CommandError('回答中の参加者がいません');
+			}
+			answering.status = command.correct ? 'correct' : 'wrong';
+			// 本番と同じく、判定を出したら全員のボタンを消す
+			for (const b of check.buzzes) {
+				if (b.status === 'waiting') {
+					b.status = 'void';
+				}
+			}
+			check.roundStartedAt = ctx.now;
+			return;
+		}
+		case 'resetBuzzes': {
+			check.buzzes = [];
+			check.roundStartedAt = ctx.now;
+			return;
+		}
+		case 'buttonCheckEnd': {
+			game.state.buttonCheck = null;
+			game.state.phase = 'waiting';
+			return;
+		}
+	}
+	throw new CommandError('ボタンチェック中は実行できません');
+};
+
+const buttonCheckCommands = new Set<BuzzerBoardCommand['type']>([
+	'buzz',
+	'judge',
+	'resetBuzzes',
+	'buttonCheckEnd',
+]);
+
 const apply = (game: G, command: BuzzerBoardCommand, ctx: CommandContext) => {
 	const {state} = game;
+	if (state.phase === 'button-check' && buttonCheckCommands.has(command.type)) {
+		applyButtonCheck(game, command, ctx);
+		return;
+	}
 	switch (command.type) {
+		case 'buttonCheckStart': {
+			if (state.phase !== 'waiting' || state.history.length > 0) {
+				throw new CommandError('ボタンチェックは最初の出題の前にだけ行えます');
+			}
+			state.buttonCheck = {startedAt: ctx.now, roundStartedAt: ctx.now, buzzes: []};
+			state.phase = 'button-check';
+			return;
+		}
+		case 'buttonCheckEnd': {
+			requireButtonCheck(state);
+			return;
+		}
 		case 'next': {
 			if (
 				state.phase === 'reading' ||
@@ -115,6 +208,8 @@ const apply = (game: G, command: BuzzerBoardCommand, ctx: CommandContext) => {
 			) {
 				throw new CommandError('出題中の問題を終了してから次に進んでください');
 			}
+			// ボタンチェック中なら、ボタンチェックを終えて第1問に進む
+			state.buttonCheck = null;
 			const unasked = unaskedQuestions(game);
 			if (unasked.length === 0) {
 				state.phase = 'finished';
@@ -506,6 +601,8 @@ export const buzzerBoard: ModeDefinition<BuzzerBoardState, BuzzerBoardCommand> =
 	permissions: {
 		next: ['host'],
 		buzz: ['participant'],
+		buttonCheckStart: ['host'],
+		buttonCheckEnd: ['host'],
 		judge: ['host'],
 		through: ['host'],
 		chooseGenre: ['host', 'participant'],
@@ -548,6 +645,12 @@ export const buzzerBoard: ModeDefinition<BuzzerBoardState, BuzzerBoardCommand> =
 		}
 		if (game.state.genreChooser === participantId) {
 			game.state.genreChooser = null;
+		}
+		const check = game.state.buttonCheck;
+		if (check) {
+			check.buzzes = arrangeBuzzes(
+				check.buzzes.filter((b) => b.participantId !== participantId),
+			).buzzes;
 		}
 		const record = currentRecord(game.state);
 		if (record && (game.state.phase === 'reading' || game.state.phase === 'answering')) {
@@ -665,6 +768,10 @@ export const buzzerBoard: ModeDefinition<BuzzerBoardState, BuzzerBoardCommand> =
 				return '次の問題へ';
 			case 'buzz':
 				return 'ボタン押下';
+			case 'buttonCheckStart':
+				return 'ボタンチェック開始';
+			case 'buttonCheckEnd':
+				return 'ボタンチェック終了';
 			case 'judge':
 				return command.correct ? '正解判定' : '誤答判定';
 			case 'through':

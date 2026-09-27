@@ -40,6 +40,11 @@
 	font-size: 0.9rem;
 }
 
+.phase[data-phase="button-check"] {
+	background: #ccfbf1;
+	color: #115e59;
+}
+
 .phase[data-phase="reading"] {
 	background: #dbeafe;
 	color: #1e40af;

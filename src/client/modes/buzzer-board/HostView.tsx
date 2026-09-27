@@ -18,7 +18,9 @@ import type {ScreenProps} from '../types.ts';
 import styles from './HostView.module.css';
 import {
 	findQuestion,
+	isButtonCheck,
 	isOpen,
+	liveBuzzes,
 	normalizeAnswer,
 	participantName,
 	questionNumber,
@@ -27,6 +29,7 @@ import {
 
 const phaseLabels: Record<string, string> = {
 	waiting: '開始前',
+	'button-check': 'ボタンチェック中',
 	reading: '読み上げ中',
 	answering: '回答中',
 	'board-answering': 'ボード回答受付中',
@@ -92,7 +95,9 @@ export const HostView = ({view, send, undo}: ScreenProps<BuzzerBoardState>) => {
 	const open = isOpen(state);
 	const isBoard = state.phase.startsWith('board-');
 	const isClosedBoard = state.phase === 'closed' && Boolean(record?.board);
-	const answering = record?.buzzes.find((b) => b.status === 'answering');
+	const buttonCheck = isButtonCheck(state);
+	const live = liveBuzzes(state);
+	const answering = live?.buzzes.find((b) => b.status === 'answering');
 
 	const clearedParticipants = game.participants.filter((p) => state.cleared[p.id]);
 	const boardAnswers = record?.board?.answers ?? {};
@@ -301,8 +306,32 @@ export const HostView = ({view, send, undo}: ScreenProps<BuzzerBoardState>) => {
 										onClick={() => act({type: 'next'})}
 										disabled={state.phase === 'finished'}
 									>
-										{upcoming.length > 0 ? '次の問題を出題' : '結果発表 (全問終了)'} <kbd>N</kbd>
+										{upcoming.length > 0
+											? buttonCheck
+												? 'ボタンチェックを終えて第1問を出題'
+												: '次の問題を出題'
+											: '結果発表 (全問終了)'}{' '}
+										<kbd>N</kbd>
 									</button>
+									{state.phase === 'waiting' && state.history.length === 0 && (
+										<button type="button" onClick={() => act({type: 'buttonCheckStart'})}>
+											ボタンチェックを開始
+										</button>
+									)}
+									{buttonCheck && (
+										<>
+											<button
+												type="button"
+												onClick={() => act({type: 'resetBuzzes'})}
+												disabled={!live?.buzzes.some((b) => b.status !== 'void')}
+											>
+												ボタン押下をリセット
+											</button>
+											<button type="button" onClick={() => act({type: 'buttonCheckEnd'})}>
+												ボタンチェックを終了
+											</button>
+										</>
+									)}
 									{state.phase === 'finished' && (
 										<button
 											type="button"
@@ -512,7 +541,12 @@ export const HostView = ({view, send, undo}: ScreenProps<BuzzerBoardState>) => {
 						</section>
 					) : (
 						<section className={styles.card}>
-							<h2>回答権</h2>
+							<h2>回答権{buttonCheck && ' (ボタンチェック)'}</h2>
+							{buttonCheck && (
+								<p className={styles.muted}>
+									参加者は自由にボタンを押せます。正誤判定をしても得点には反映されません
+								</p>
+							)}
 							{answering ? (
 								<div className={styles.answering}>
 									<div className={styles.answeringName}>
@@ -537,16 +571,18 @@ export const HostView = ({view, send, undo}: ScreenProps<BuzzerBoardState>) => {
 								</div>
 							) : (
 								<p className={styles.muted}>
-									{state.phase === 'reading' ? 'ボタンが押されるのを待っています' : '—'}
+									{state.phase === 'reading' || buttonCheck
+										? 'ボタンが押されるのを待っています'
+										: '—'}
 								</p>
 							)}
-							{record && record.buzzes.length > 0 && (
+							{live && live.buzzes.length > 0 && (
 								<ol className={styles.buzzList}>
-									{record.buzzes.map((buzz) => (
+									{live.buzzes.map((buzz) => (
 										<li key={buzz.participantId} data-status={buzz.status}>
 											<span>{participantName(game, buzz.participantId)}</span>
 											<span className={styles.buzzMeta}>
-												+{((buzz.pressedAt - record.startedAt) / 1000).toFixed(2)}秒 ・{' '}
+												+{((buzz.pressedAt - live.startedAt) / 1000).toFixed(2)}秒 ・{' '}
 												{buzzLabels[buzz.status]}
 											</span>
 										</li>

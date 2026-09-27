@@ -9,12 +9,15 @@ import type {ScreenProps} from '../types.ts';
 import {
 	boardListLayout,
 	findQuestion,
+	isButtonCheck,
 	isOpen,
+	liveBuzzes,
 	participantName,
 	previousRecord,
 	questionFontSize,
 	questionNumber,
 	scoreboardLayout,
+	soundRecord,
 	standings,
 } from './helpers.ts';
 import styles from './MonitorView.module.css';
@@ -31,8 +34,10 @@ export const MonitorView = ({view}: ScreenProps<BuzzerBoardState>) => {
 	const record = currentRecord(state);
 	const ranking = standings(game);
 	const layout = scoreboardLayout(ranking.length, 710);
-	const answering = record?.buzzes.find((b) => b.status === 'answering');
-	const buzzes = record?.buzzes.filter((b) => b.status !== 'void') ?? [];
+	const buttonCheck = isButtonCheck(state);
+	const live = liveBuzzes(state);
+	const answering = live?.buzzes.find((b) => b.status === 'answering');
+	const buzzes = live?.buzzes.filter((b) => b.status !== 'void') ?? [];
 	const secondaryBuzzes = answering
 		? buzzes.filter((b) => b.participantId !== answering.participantId)
 		: buzzes;
@@ -74,6 +79,8 @@ export const MonitorView = ({view}: ScreenProps<BuzzerBoardState>) => {
 		switch (state.phase) {
 			case 'waiting':
 				return 'まもなく開始';
+			case 'button-check':
+				return 'ボタンチェック';
 			case 'finished':
 				return '全問終了';
 			case 'board-answering':
@@ -177,7 +184,7 @@ export const MonitorView = ({view}: ScreenProps<BuzzerBoardState>) => {
 						</section>
 					) : (
 						<section className={styles.panel} data-highlight={Boolean(answering)}>
-							<div className={styles.panelLabel}>回答権</div>
+							<div className={styles.panelLabel}>回答権{buttonCheck && ' (ボタンチェック)'}</div>
 							{record?.genre && <div className={styles.panelGenreBadge}>{record.genre}</div>}
 							{answering ? (
 								<div className={styles.answeringSection}>
@@ -206,11 +213,13 @@ export const MonitorView = ({view}: ScreenProps<BuzzerBoardState>) => {
 							) : (
 								<div className={styles.placeholderSection}>
 									<div className={styles.placeholder}>
-										{state.phase === 'reading'
-											? '問題読み上げ中'
-											: record?.result
-												? describeResult(record.result)
-												: '—'}
+										{buttonCheck
+											? 'ボタンチェック中'
+											: state.phase === 'reading'
+												? '問題読み上げ中'
+												: record?.result
+													? describeResult(record.result)
+													: '—'}
 									</div>
 									{secondaryBuzzes.length > 0 && (
 										<ol className={styles.buzzes}>
@@ -332,7 +341,7 @@ export const MonitorView = ({view}: ScreenProps<BuzzerBoardState>) => {
 					<div className={styles.overlayScore}>{winners[0]?.score} pt</div>
 				</div>
 			)}
-			<BuzzerSounds record={state.history.at(-1) ?? null} />
+			<BuzzerSounds record={soundRecord(state)} />
 		</div>
 	);
 };

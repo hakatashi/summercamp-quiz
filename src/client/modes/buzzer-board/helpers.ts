@@ -1,3 +1,4 @@
+import type {Buzz} from '../../../shared/buzz.ts';
 import {
 	type BuzzerBoardState,
 	currentRecord,
@@ -45,6 +46,33 @@ export const findQuestion = (game: BuzzerBoardGame, questionId: string): Questio
 /** 出題中 (読み上げ中・回答中) か */
 export const isOpen = (state: BuzzerBoardState) =>
 	state.phase === 'reading' || state.phase === 'answering';
+
+/** ボタンチェック中か */
+export const isButtonCheck = (state: BuzzerBoardState) =>
+	state.phase === 'button-check' && Boolean(state.buttonCheck);
+
+/**
+ * いま画面に出すボタン押下の一覧と、経過時間の基準にする時刻。
+ * ボタンチェック中はボタンチェックの押下、それ以外は出題中の問題の押下を返す
+ */
+export const liveBuzzes = (state: BuzzerBoardState): {buzzes: Buzz[]; startedAt: number} | null => {
+	if (state.phase === 'button-check' && state.buttonCheck) {
+		return {buzzes: state.buttonCheck.buzzes, startedAt: state.buttonCheck.roundStartedAt};
+	}
+	const record = currentRecord(state);
+	return record ? {buzzes: record.buzzes, startedAt: record.startedAt} : null;
+};
+
+/** 効果音の判断に使う記録。ボタンチェック中はボタンチェックを1つの問題のように扱う */
+export const soundRecord = (state: BuzzerBoardState) =>
+	state.phase === 'button-check' && state.buttonCheck
+		? {
+				questionId: 'button-check',
+				startedAt: state.buttonCheck.startedAt,
+				buzzes: state.buttonCheck.buzzes,
+				result: null,
+			}
+		: (state.history.at(-1) ?? null);
 
 /** 画面に「前の問題」として出す記録 (出題中・ボードクイズ中の問題は除く) */
 export const previousRecord = (state: BuzzerBoardState): QuestionRecord | null => {

@@ -652,11 +652,119 @@ describe('buzzer-board mode', () => {
 			expect(game.state.phase).toBe('waiting');
 		});
 
+		it('isBeforeStart はボタンチェック中は false になる', () => {
+			let game = createSampleGame(3);
+			game = exec(game, {type: 'buttonCheckStart'}, host, 500);
+			expect(buzzerBoard.isBeforeStart?.(game)).toBe(false);
+		});
+
 		it('isBeforeStart は最初の出題の前だけ true になる', () => {
 			let game = createSampleGame(3);
 			expect(buzzerBoard.isBeforeStart?.(game)).toBe(true);
 			game = exec(game, {type: 'next', questionId: 'q1'}, host, 1000);
 			expect(buzzerBoard.isBeforeStart?.(game)).toBe(false);
+		});
+	});
+
+	describe('ボタンチェック', () => {
+		const p3: Actor = {role: 'participant', participantId: 'p3'};
+
+		it('第1問の前にだけ開始でき、着順どおりに回答権がつく', () => {
+			let game = createSampleGame(3);
+			game = exec(game, {type: 'buttonCheckStart'}, host, 500);
+			expect(game.state.phase).toBe('button-check');
+			expect(game.state.history).toEqual([]);
+
+			game = exec(game, {type: 'buzz', pressedAt: 700}, p2, 710);
+			game = exec(game, {type: 'buzz', pressedAt: 600}, p1, 720);
+			expect(game.state.buttonCheck?.buzzes.map((b) => [b.participantId, b.status])).toEqual([
+				['p1', 'answering'],
+				['p2', 'waiting'],
+			]);
+			// 押したボタンは判定かリセットまで押せない
+			expect(() => exec(game, {type: 'buzz', pressedAt: 800}, p1, 800)).toThrow();
+		});
+
+		it('出題後には開始できない', () => {
+			let game = createSampleGame(3);
+			game = exec(game, {type: 'next', questionId: 'q1'}, host, 1000);
+			game = exec(game, {type: 'through'}, host, 1100);
+			expect(() => exec(game, {type: 'buttonCheckStart'}, host, 1200)).toThrow();
+		});
+
+		it('正誤判定をしても得点・休み・連答は変わらず、全員が押し直せる', () => {
+			let game = createSampleGame(3);
+			game = exec(game, {type: 'buttonCheckStart'}, host, 500);
+			game = exec(game, {type: 'buzz', pressedAt: 600}, p1, 600);
+			game = exec(game, {type: 'buzz', pressedAt: 610}, p2, 610);
+			game = exec(game, {type: 'judge', correct: true}, host, 700);
+			expect(game.state.buttonCheck?.buzzes.map((b) => [b.participantId, b.status])).toEqual([
+				['p1', 'correct'],
+				['p2', 'void'],
+			]);
+			expect(game.state.phase).toBe('button-check');
+
+			game = exec(game, {type: 'buzz', pressedAt: 800}, p2, 800);
+			// 前の判定結果は消える
+			expect(game.state.buttonCheck?.buzzes.map((b) => [b.participantId, b.status])).toEqual([
+				['p2', 'answering'],
+			]);
+			game = exec(game, {type: 'judge', correct: false}, host, 900);
+			expect(game.state.buttonCheck?.buzzes[0]?.status).toBe('wrong');
+
+			expect(game.state.scores).toEqual({p1: 0, p2: 0, p3: 0});
+			expect(game.state.rest).toEqual({p1: 0, p2: 0, p3: 0});
+			expect(game.state.cleared).toEqual({p1: false, p2: false, p3: false});
+			expect(game.state.streak).toBeNull();
+			expect(game.state.genreChooser).toBeNull();
+
+			// 誤答した人もすぐに押し直せる
+			game = exec(game, {type: 'buzz', pressedAt: 1000}, p2, 1000);
+			expect(game.state.buttonCheck?.buzzes.map((b) => b.status)).toEqual(['answering']);
+		});
+
+		it('リセットで全員のボタンが消える', () => {
+			let game = createSampleGame(3);
+			game = exec(game, {type: 'buttonCheckStart'}, host, 500);
+			game = exec(game, {type: 'buzz', pressedAt: 600}, p1, 600);
+			game = exec(game, {type: 'buzz', pressedAt: 610}, p3, 610);
+			game = exec(game, {type: 'resetBuzzes'}, host, 700);
+			expect(game.state.buttonCheck?.buzzes).toEqual([]);
+			game = exec(game, {type: 'buzz', pressedAt: 800}, p1, 800);
+			expect(game.state.buttonCheck?.buzzes[0]?.status).toBe('answering');
+		});
+
+		it('回答中の参加者が削除されたら次の人に回答権が移る', () => {
+			let game = createSampleGame(3);
+			game = exec(game, {type: 'buttonCheckStart'}, host, 500);
+			game = exec(game, {type: 'buzz', pressedAt: 600}, p1, 600);
+			game = exec(game, {type: 'buzz', pressedAt: 610}, p2, 610);
+			game = exec(game, {type: 'participants.remove', participantId: 'p1'}, host, 700);
+			expect(game.state.buttonCheck?.buzzes.map((b) => [b.participantId, b.status])).toEqual([
+				['p2', 'answering'],
+			]);
+		});
+
+		it('終了すると開始前に戻り、次の問題に進むとそのまま第1問になる', () => {
+			let game = createSampleGame(3);
+			game = exec(game, {type: 'buttonCheckStart'}, host, 500);
+			game = exec(game, {type: 'buzz', pressedAt: 600}, p1, 600);
+			const ended = exec(game, {type: 'buttonCheckEnd'}, host, 700);
+			expect(ended.state.phase).toBe('waiting');
+			expect(ended.state.buttonCheck).toBeNull();
+
+			game = exec(game, {type: 'next', questionId: 'q1'}, host, 1000);
+			expect(game.state.phase).toBe('reading');
+			expect(game.state.buttonCheck).toBeNull();
+			expect(game.state.history[0]?.buzzes).toEqual([]);
+		});
+
+		it('ボタンチェック中はスルーや取り消しを受け付けない', () => {
+			let game = createSampleGame(3);
+			game = exec(game, {type: 'buttonCheckStart'}, host, 500);
+			expect(() => exec(game, {type: 'through'}, host, 600)).toThrow();
+			expect(() => exec(game, {type: 'cancel', returnToPool: true}, host, 600)).toThrow();
+			expect(() => exec(game, {type: 'judge', correct: true}, host, 600)).toThrow();
 		});
 	});
 });

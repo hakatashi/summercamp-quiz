@@ -62,8 +62,19 @@ export interface QuestionRecord {
 	board: BoardRecord | null;
 }
 
+/** 第1問の前のボタンチェック。得点などには一切影響しない */
+export interface ButtonCheck {
+	/** ボタンチェックを始めた時刻 */
+	startedAt: number;
+	/** 直近の判定・リセットの時刻 (押下時刻の補正の下限に使う) */
+	roundStartedAt: number;
+	/** 未判定の押下と、直近の判定結果 */
+	buzzes: Buzz[];
+}
+
 export type Phase =
 	| 'waiting'
+	| 'button-check'
 	| 'reading'
 	| 'answering'
 	| 'board-answering'
@@ -81,6 +92,8 @@ export interface BuzzerBoardState {
 	genreChooser: string | null;
 	history: QuestionRecord[];
 	unaskedCounts: Record<Genre, number>;
+	/** ボタンチェック中だけ値を持つ */
+	buttonCheck?: ButtonCheck | null;
 }
 
 export const buzzerBoardCommandSchema = z.discriminatedUnion('type', [
@@ -90,6 +103,8 @@ export const buzzerBoardCommandSchema = z.discriminatedUnion('type', [
 		seed: z.number().int().optional(),
 	}),
 	buzzCommandSchema,
+	z.object({type: z.literal('buttonCheckStart')}),
+	z.object({type: z.literal('buttonCheckEnd')}),
 	z.object({type: z.literal('judge'), correct: z.boolean()}),
 	z.object({type: z.literal('through')}),
 	z.object({type: z.literal('chooseGenre'), genre: genreSchema}),

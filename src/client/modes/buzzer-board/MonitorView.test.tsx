@@ -123,4 +123,22 @@ describe('MonitorView (buzzer-board)', () => {
 		expect(html).toContain('grid-template-columns:repeat(3, minmax(0, 1fr))');
 		expect(html).toContain('回答30');
 	});
+
+	it('ボタンチェック中は、ボタンチェックの押下を回答権として表示する', () => {
+		const view = createView('button-check', {});
+		view.game.state.history = [];
+		view.game.state.buttonCheck = {
+			startedAt: 500,
+			roundStartedAt: 500,
+			buzzes: [
+				{participantId: 'p2', pressedAt: 600, receivedAt: 600, status: 'answering'},
+				{participantId: 'p1', pressedAt: 700, receivedAt: 700, status: 'waiting'},
+			],
+		};
+		const html = renderToStaticMarkup(<MonitorView {...baseProps} view={view} />);
+		expect(html).toContain('ボタンチェック');
+		expect(html).toContain('回答権 (ボタンチェック)');
+		expect(html).toContain('参加者2');
+		expect(html).toContain('参加者1');
+	});
 });

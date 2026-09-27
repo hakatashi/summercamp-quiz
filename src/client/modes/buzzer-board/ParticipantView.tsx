@@ -13,7 +13,14 @@ import {BuzzButton} from '../../components/BuzzButton.tsx';
 import {ClockDiagnostics} from '../../components/ClockDiagnostics.tsx';
 import {useNotify} from '../../components/Toast.tsx';
 import type {ScreenProps} from '../types.ts';
-import {findQuestion, isOpen, previousRecord, standings} from './helpers.ts';
+import {
+	findQuestion,
+	isButtonCheck,
+	isOpen,
+	liveBuzzes,
+	previousRecord,
+	standings,
+} from './helpers.ts';
 import styles from './ParticipantView.module.css';
 
 export const ParticipantView = ({view, send, participantId}: ScreenProps<BuzzerBoardState>) => {
@@ -56,15 +63,22 @@ export const ParticipantView = ({view, send, participantId}: ScreenProps<BuzzerB
 			setBoardInput('');
 		}
 	}
-	const myBuzz = record?.buzzes.find(
-		(b) => b.participantId === participantId && b.status !== 'void',
-	);
+	const buttonCheck = isButtonCheck(state);
+	const live = liveBuzzes(state);
+	const myBuzz = live?.buzzes.find((b) => b.participantId === participantId && b.status !== 'void');
 	const myBoardAns = record?.board?.answers[participantId ?? ''];
+	const myPending = myBuzz?.status === 'waiting' || myBuzz?.status === 'answering';
 
-	const canBuzz = isOpen(state) && !myCleared && myRest === 0 && !myBuzz;
+	// ボタンチェック中は休みや勝ち抜けに関係なく、判定・リセットまでの間以外はいつでも押せる
+	const canBuzz = buttonCheck ? !myPending : isOpen(state) && !myCleared && myRest === 0 && !myBuzz;
 
 	// 押せない理由
 	const disableReason = (() => {
+		if (buttonCheck) {
+			if (myBuzz?.status === 'answering') return 'あなたの回答です!';
+			if (myBuzz?.status === 'waiting') return '回答権待ちです';
+			return null;
+		}
 		if (myCleared) return '早押し勝ち抜けです (ボードクイズをお待ちください)';
 		if (myRest > 0) return `お休み中です (残り ${myRest} 問)`;
 		if (myBuzz) {
@@ -82,7 +96,7 @@ export const ParticipantView = ({view, send, participantId}: ScreenProps<BuzzerB
 		return null;
 	})();
 
-	const pending = record?.buzzes.filter((b) => b.status === 'waiting' || b.status === 'answering');
+	const pending = live?.buzzes.filter((b) => b.status === 'waiting' || b.status === 'answering');
 	const myOrder = myBuzz && pending ? pending.indexOf(myBuzz) + 1 : 0;
 
 	const status = (() => {
@@ -107,6 +121,19 @@ export const ParticipantView = ({view, send, participantId}: ScreenProps<BuzzerB
 				}
 			}
 			return {text: '問題終了', tone: 'neutral'};
+		}
+		if (buttonCheck) {
+			switch (myBuzz?.status) {
+				case 'answering':
+					return {text: 'ボタンチェック: あなたの回答です!', tone: 'answering'};
+				case 'waiting':
+					return {text: `ボタンチェック: 回答権待ち (${myOrder} 番目)`, tone: 'waiting'};
+				case 'correct':
+					return {text: 'ボタンチェック: 正解!', tone: 'correct'};
+				case 'wrong':
+					return {text: 'ボタンチェック: 誤答', tone: 'wrong'};
+			}
+			return {text: 'ボタンチェック中 (自由に押してください)', tone: 'neutral'};
 		}
 		if (myCleared) {
 			return {text: '勝ち抜け!', tone: 'cleared'};
@@ -277,7 +304,7 @@ export const ParticipantView = ({view, send, participantId}: ScreenProps<BuzzerB
 				<div className={styles.buttonArea}>
 					<BuzzButton
 						enabled={canBuzz}
-						armKey={`${state.history.length}:${record?.startedAt ?? ''}:${myBuzz ? 1 : 0}:${myRest}:${myCleared ? 1 : 0}`}
+						armKey={`${state.history.length}:${record?.startedAt ?? ''}:${buttonCheck ? `check:${myPending ? 1 : 0}` : ''}:${myBuzz ? 1 : 0}:${myRest}:${myCleared ? 1 : 0}`}
 						label="PUSH"
 						onPress={onPress}
 					/>
